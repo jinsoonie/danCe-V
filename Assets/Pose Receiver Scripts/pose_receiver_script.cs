@@ -8,12 +8,19 @@ using System.Threading;
 /// The left hand follows `LeftHandTarget` using Animation Rigging (Two Bone IK). Check hierarchy
 public class PoseReceiver : MonoBehaviour
 {
-    public Transform leftHandTarget; // Reference to 'LeftHandTarget' GameObject
-    // this "leftHandTarget" will be a field in character hierarchy, LeftHandTarget (transform) should be assigned to it
+    // specifying a public Transform here gives the Pose Receiver (script) that specified field in hierarchy
+    public Transform leftHandTarget, rightHandTarget; // For this field in hierarchy, set reference to 'LeftHandTarget', 'RightHandTarget' GameObject
+    // this "leftHandTarget" will be a field in character hierarchy, LeftHandTarget (transform) should be assigned to it    public Transform leftHandTarget, rightHandTarget;
+    public Transform leftFootTarget, rightFootTarget;
+    public Transform headTarget, leftShoulderTarget, rightShoulderTarget;
+    public Transform spineTarget, hipsTarget, leftElbowTarget, rightElbowTarget;
+    public Transform leftKneeTarget, rightKneeTarget;
+
 
     private UdpClient udpClient; // UDP socket to receive data
     private Thread udpReceiveThread; // Background thread for listening to UDP messages
-    private Vector3 receivedPosition = Vector3.zero; // Stores the received position data
+    // private Vector3 receivedPosition = Vector3.zero; // Stores the received position data (for leftHand right now only)
+    private PoseData receivedPose = new PoseData();
 
     /// Unity Start() method runs once when the scene starts.
     /// init UDP connection.
@@ -46,10 +53,8 @@ public class PoseReceiver : MonoBehaviour
                 Debug.Log(json);
 
                 // Convert JSON string to PoseData object
-                PoseData pose = JsonUtility.FromJson<PoseData>(json);
-
-                // Convert received position into Unity's coordinate space
-                receivedPosition = new Vector3(pose.x, pose.y, pose.z);
+                // PoseData pose = JsonUtility.FromJson<PoseData>(json);
+                receivedPose = JsonUtility.FromJson<PoseData>(json);
             }
             catch (SocketException e)
             {
@@ -63,7 +68,23 @@ public class PoseReceiver : MonoBehaviour
     void Update()
     {
         // Smooth movement to avoid sudden jumps
-        leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPosition, Time.deltaTime * 5);
+        // leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPosition, Time.deltaTime * 5);
+        leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPose.leftHand, Time.deltaTime * 5);
+        // add more body parts here..
+        rightHandTarget.position = Vector3.Lerp(rightHandTarget.position, receivedPose.rightHand, Time.deltaTime * 5);
+        leftFootTarget.position = Vector3.Lerp(leftFootTarget.position, receivedPose.leftFoot, Time.deltaTime * 5);
+        rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, receivedPose.rightFoot, Time.deltaTime * 5);
+
+        headTarget.position = Vector3.Lerp(headTarget.position, receivedPose.head, Time.deltaTime * 5);
+        leftShoulderTarget.position = Vector3.Lerp(leftShoulderTarget.position, receivedPose.leftShoulder, Time.deltaTime * 5);
+        rightShoulderTarget.position = Vector3.Lerp(rightShoulderTarget.position, receivedPose.rightShoulder, Time.deltaTime * 5);
+        spineTarget.position = Vector3.Lerp(spineTarget.position, receivedPose.spine, Time.deltaTime * 5);
+        hipsTarget.position = Vector3.Lerp(hipsTarget.position, receivedPose.hips, Time.deltaTime * 5);
+
+        leftElbowTarget.position = Vector3.Lerp(leftElbowTarget.position, receivedPose.leftElbow, Time.deltaTime * 5);
+        rightElbowTarget.position = Vector3.Lerp(rightElbowTarget.position, receivedPose.rightElbow, Time.deltaTime * 5);
+        leftKneeTarget.position = Vector3.Lerp(leftKneeTarget.position, receivedPose.leftKnee, Time.deltaTime * 5);
+        rightKneeTarget.position = Vector3.Lerp(rightKneeTarget.position, receivedPose.rightKnee, Time.deltaTime * 5);
     }
 
     /// Cleans up UDP thread when Unity application closes.
@@ -73,12 +94,15 @@ public class PoseReceiver : MonoBehaviour
         udpClient.Close(); // Close the UDP connection
     }
 
-    /// Data structure for receiving pose data from Python.
+    /// Data structure for receiving pose data from Python. Need to add multiple bones/joints data now
     [System.Serializable]
     public class PoseData
     {
-        public float x; // X coordinate of hand position
-        public float y; // Y coordinate of hand position
-        public float z; // Z coordinate (depth)
+        // public float x; // X coordinate of hand position
+        // public float y; // Y coordinate of hand position
+        // public float z; // Z coordinate (depth)
+        public Vector3 leftHand, rightHand, leftFoot, rightFoot;
+        public Vector3 head, leftShoulder, rightShoulder, spine, hips;
+        public Vector3 leftElbow, rightElbow, leftKnee, rightKnee;
     }
 }
