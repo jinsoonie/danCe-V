@@ -12,9 +12,10 @@ public class PoseReceiver : MonoBehaviour
     public Transform leftHandTarget, rightHandTarget; // For this field in hierarchy, set reference to 'LeftHandTarget', 'RightHandTarget' GameObject
     // this "leftHandTarget" will be a field in character hierarchy, LeftHandTarget (transform) should be assigned to it    public Transform leftHandTarget, rightHandTarget;
     public Transform leftFootTarget, rightFootTarget;
-    public Transform headTarget, leftShoulderTarget, rightShoulderTarget;
-    public Transform spineTarget, hipsTarget, leftElbowTarget, rightElbowTarget;
-    public Transform leftKneeTarget, rightKneeTarget;
+    public Transform headTarget;
+    // public Transform leftShoulderTarget, rightShoulderTarget;
+    // public Transform spineTarget, hipsTarget, leftElbowTarget, rightElbowTarget;
+    // public Transform leftKneeTarget, rightKneeTarget;
 
 
     private UdpClient udpClient; // UDP socket to receive data
@@ -76,15 +77,15 @@ public class PoseReceiver : MonoBehaviour
         rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, receivedPose.rightFoot, Time.deltaTime * 5);
 
         headTarget.position = Vector3.Lerp(headTarget.position, receivedPose.head, Time.deltaTime * 5);
-        leftShoulderTarget.position = Vector3.Lerp(leftShoulderTarget.position, receivedPose.leftShoulder, Time.deltaTime * 5);
-        rightShoulderTarget.position = Vector3.Lerp(rightShoulderTarget.position, receivedPose.rightShoulder, Time.deltaTime * 5);
-        spineTarget.position = Vector3.Lerp(spineTarget.position, receivedPose.spine, Time.deltaTime * 5);
-        hipsTarget.position = Vector3.Lerp(hipsTarget.position, receivedPose.hips, Time.deltaTime * 5);
+        // leftShoulderTarget.position = Vector3.Lerp(leftShoulderTarget.position, receivedPose.leftShoulder, Time.deltaTime * 5);
+        // rightShoulderTarget.position = Vector3.Lerp(rightShoulderTarget.position, receivedPose.rightShoulder, Time.deltaTime * 5);
+        // spineTarget.position = Vector3.Lerp(spineTarget.position, receivedPose.spine, Time.deltaTime * 5);
+        // hipsTarget.position = Vector3.Lerp(hipsTarget.position, receivedPose.hips, Time.deltaTime * 5);
 
-        leftElbowTarget.position = Vector3.Lerp(leftElbowTarget.position, receivedPose.leftElbow, Time.deltaTime * 5);
-        rightElbowTarget.position = Vector3.Lerp(rightElbowTarget.position, receivedPose.rightElbow, Time.deltaTime * 5);
-        leftKneeTarget.position = Vector3.Lerp(leftKneeTarget.position, receivedPose.leftKnee, Time.deltaTime * 5);
-        rightKneeTarget.position = Vector3.Lerp(rightKneeTarget.position, receivedPose.rightKnee, Time.deltaTime * 5);
+        // leftElbowTarget.position = Vector3.Lerp(leftElbowTarget.position, receivedPose.leftElbow, Time.deltaTime * 5);
+        // rightElbowTarget.position = Vector3.Lerp(rightElbowTarget.position, receivedPose.rightElbow, Time.deltaTime * 5);
+        // leftKneeTarget.position = Vector3.Lerp(leftKneeTarget.position, receivedPose.leftKnee, Time.deltaTime * 5);
+        // rightKneeTarget.position = Vector3.Lerp(rightKneeTarget.position, receivedPose.rightKnee, Time.deltaTime * 5);
     }
 
     /// Cleans up UDP thread when Unity application closes.

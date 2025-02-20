@@ -62,7 +62,22 @@ poses = [
 ]
 
 neutral_pose = {
-    "leftHand": {"x": -0.5, "y": 1.5, "z": 0.0},      # Arms out
+    "leftHand": {"x": 3.782351e-10, "y": 0.2527094, "z": 5.080531e-10},      # Arms extended horizontally
+    "rightHand": {"x": -3.577438e-10, "y": 0.2527121, "z": -2.266648e-11},
+    "leftFoot": {"x": 1.099628e-10, "y": 0.07426425, "z": 0.0},     # Feet aligned with body
+    "rightFoot": {"x": -1.265703e-10, "y": 0.07426425, "z": -2.383091e-11},
+    "head": {"x": 0.0, "y": 0.06762298, "z": 0.03044908},           # Head positioned naturally
+    "leftShoulder": {"x": -0.4, "y": 1.6, "z": 0.0},  # Shoulder width position
+    "rightShoulder": {"x": 0.4, "y": 1.6, "z": 0.0},
+    "spine": {"x": 0.0, "y": 1.3, "z": 0.0},          # Torso aligned
+    "hips": {"x": 0.0, "y": 1.0, "z": 0.0},           # Hips neutral position
+    "leftElbow": {"x": -0.6, "y": 1.5, "z": 0.0},     # Elbows at shoulder height
+    "rightElbow": {"x": 0.6, "y": 1.5, "z": 0.0},
+    "leftKnee": {"x": -0.15, "y": 0.5, "z": 0.0},     # Legs straight
+    "rightKnee": {"x": 0.15, "y": 0.5, "z": 0.0}
+}
+
+'''"leftHand": {"x": -0.5, "y": 1.5, "z": 0.0},      # Arms out
     "rightHand": {"x": 0.5, "y": 1.5, "z": 0.0},
     "leftFoot": {"x": -0.3, "y": 0.0, "z": 0.0},      # Feet flat
     "rightFoot": {"x": 0.3, "y": 0.0, "z": 0.0},
@@ -74,8 +89,8 @@ neutral_pose = {
     "leftElbow": {"x": -0.6, "y": 1.3, "z": 0.0},     # Elbows slightly bent
     "rightElbow": {"x": 0.6, "y": 1.3, "z": 0.0},
     "leftKnee": {"x": -0.3, "y": 0.5, "z": 0.0},      # Legs straight
-    "rightKnee": {"x": 0.3, "y": 0.5, "z": 0.0}
-}
+    "rightKnee": {"x": 0.3, "y": 0.5, "z": 0.0} '''
+    
 
 
 # init UDP socket
