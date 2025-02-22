@@ -53,9 +53,16 @@ public class PoseReceiver : MonoBehaviour
                 // inserted for testing/printing json message (contains testmsg + 3 floats?)
                 Debug.Log(json);
 
-                // Convert JSON string to PoseData object
-                // PoseData pose = JsonUtility.FromJson<PoseData>(json);
-                receivedPose = JsonUtility.FromJson<PoseData>(json);
+                // Convert JSON string to PoseData object (parse)
+                PoseData tempPose = JsonUtility.FromJson<PoseData>(json);
+
+                // Apply coordinate transformation once, i.e. python-to-unity coordinate system
+                receivedPose.leftHand = new Vector3(-tempPose.leftHand.x, tempPose.leftHand.y, -tempPose.leftHand.z);
+                receivedPose.rightHand = new Vector3(-tempPose.rightHand.x, tempPose.rightHand.y, -tempPose.rightHand.z);
+                receivedPose.leftFoot = new Vector3(-tempPose.leftFoot.x, tempPose.leftFoot.y, -tempPose.leftFoot.z);
+                receivedPose.rightFoot = new Vector3(-tempPose.rightFoot.x, tempPose.rightFoot.y, -tempPose.rightFoot.z);
+                receivedPose.head = new Vector3(-tempPose.head.x, tempPose.head.y, -tempPose.head.z);
+
             }
             catch (SocketException e)
             {
@@ -69,14 +76,20 @@ public class PoseReceiver : MonoBehaviour
     void Update()
     {
         // Smooth movement to avoid sudden jumps
-        // leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPosition, Time.deltaTime * 5);
         leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPose.leftHand, Time.deltaTime * 5);
         // add more body parts here..
         rightHandTarget.position = Vector3.Lerp(rightHandTarget.position, receivedPose.rightHand, Time.deltaTime * 5);
+        // rightFootTarget.position = receivedPose.rightFoot;
+        // leftFootTarget.position = receivedPose.leftFoot;
+        // leftHandTarget.position = receivedPose.leftHand;
+        // rightHandTarget.position = receivedPose.rightHand;
+        // headTarget.position = receivedPose.head;
+
         leftFootTarget.position = Vector3.Lerp(leftFootTarget.position, receivedPose.leftFoot, Time.deltaTime * 5);
         rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, receivedPose.rightFoot, Time.deltaTime * 5);
 
         headTarget.position = Vector3.Lerp(headTarget.position, receivedPose.head, Time.deltaTime * 5);
+
         // leftShoulderTarget.position = Vector3.Lerp(leftShoulderTarget.position, receivedPose.leftShoulder, Time.deltaTime * 5);
         // rightShoulderTarget.position = Vector3.Lerp(rightShoulderTarget.position, receivedPose.rightShoulder, Time.deltaTime * 5);
         // spineTarget.position = Vector3.Lerp(spineTarget.position, receivedPose.spine, Time.deltaTime * 5);
@@ -103,7 +116,8 @@ public class PoseReceiver : MonoBehaviour
         // public float y; // Y coordinate of hand position
         // public float z; // Z coordinate (depth)
         public Vector3 leftHand, rightHand, leftFoot, rightFoot;
-        public Vector3 head, leftShoulder, rightShoulder, spine, hips;
-        public Vector3 leftElbow, rightElbow, leftKnee, rightKnee;
+        public Vector3 head;
+        // leftShoulder, rightShoulder, spine, hips;
+        // public Vector3 leftElbow, rightElbow, leftKnee, rightKnee;
     }
 }
