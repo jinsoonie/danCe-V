@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
+
 /// script listens for UDP messages from Python and updates the position of `LeftHandTarget`.
 /// The left hand follows `LeftHandTarget` using Animation Rigging (Two Bone IK). Check hierarchy
 public class PoseReceiver : MonoBehaviour
@@ -13,6 +14,9 @@ public class PoseReceiver : MonoBehaviour
     // this "leftHandTarget" will be a field in character hierarchy, LeftHandTarget (transform) should be assigned to it    public Transform leftHandTarget, rightHandTarget;
     public Transform leftFootTarget, rightFootTarget;
     public Transform headTarget;
+
+    public Transform avatarRoot;  // store the Hips transform
+
     // public Transform leftShoulderTarget, rightShoulderTarget;
     // public Transform spineTarget, hipsTarget, leftElbowTarget, rightElbowTarget;
     // public Transform leftKneeTarget, rightKneeTarget;
@@ -20,7 +24,6 @@ public class PoseReceiver : MonoBehaviour
 
     private UdpClient udpClient; // UDP socket to receive data
     private Thread udpReceiveThread; // Background thread for listening to UDP messages
-    // private Vector3 receivedPosition = Vector3.zero; // Stores the received position data (for leftHand right now only)
     private PoseData receivedPose = new PoseData();
 
     /// Unity Start() method runs once when the scene starts.
@@ -35,6 +38,14 @@ public class PoseReceiver : MonoBehaviour
         udpReceiveThread.IsBackground = true;
         udpReceiveThread.Start();
     }
+
+    // z does not need to be negated it seems because camera is "facing towards front from the back"
+    Vector3 ConvertMediaPipeToUnity(Vector3 mpPosition, float dynamicScale = 10.0f)
+    {
+        // apply scaling
+        return new Vector3(-mpPosition.x * dynamicScale, mpPosition.y * dynamicScale, mpPosition.z * dynamicScale);
+    }
+
 
     /// Continuously listens for UDP messages and updates the received position.
     /// Runs on a separate thread.
@@ -51,18 +62,26 @@ public class PoseReceiver : MonoBehaviour
                 string json = Encoding.UTF8.GetString(data);
 
                 // inserted for testing/printing json message (contains testmsg + 3 floats?)
-                Debug.Log(json);
+                Debug.Log("Received JSON: " + json);
 
                 // Convert JSON string to PoseData object (parse)
                 PoseData tempPose = JsonUtility.FromJson<PoseData>(json);
 
-                // Apply coordinate transformation once, i.e. python-to-unity coordinate system
-                receivedPose.leftHand = new Vector3(-tempPose.leftHand.x, tempPose.leftHand.y, -tempPose.leftHand.z);
-                receivedPose.rightHand = new Vector3(-tempPose.rightHand.x, tempPose.rightHand.y, -tempPose.rightHand.z);
-                receivedPose.leftFoot = new Vector3(-tempPose.leftFoot.x, tempPose.leftFoot.y, -tempPose.leftFoot.z);
-                receivedPose.rightFoot = new Vector3(-tempPose.rightFoot.x, tempPose.rightFoot.y, -tempPose.rightFoot.z);
-                receivedPose.head = new Vector3(-tempPose.head.x, tempPose.head.y, -tempPose.head.z);
+                receivedPose.LEFT_WRIST = ConvertMediaPipeToUnity(tempPose.LEFT_WRIST);
+                receivedPose.RIGHT_WRIST = ConvertMediaPipeToUnity(tempPose.RIGHT_WRIST);
+                receivedPose.LEFT_ANKLE = ConvertMediaPipeToUnity(tempPose.LEFT_ANKLE);
+                receivedPose.RIGHT_ANKLE = ConvertMediaPipeToUnity(tempPose.RIGHT_ANKLE);
+                receivedPose.NOSE = ConvertMediaPipeToUnity(tempPose.NOSE);
 
+                receivedPose.LEFT_HIP = ConvertMediaPipeToUnity(tempPose.LEFT_HIP);
+                receivedPose.RIGHT_HIP = ConvertMediaPipeToUnity(tempPose.RIGHT_HIP);
+
+                // Debug.Log(receivedPose.LEFT_WRIST.x);
+                // Debug.Log("Z");
+                // Debug.Log(receivedPose.LEFT_WRIST.z);
+                Debug.Log(receivedPose.LEFT_HIP.x);
+                Debug.Log("Z");
+                Debug.Log(receivedPose.LEFT_HIP.z);
             }
             catch (SocketException e)
             {
@@ -75,20 +94,34 @@ public class PoseReceiver : MonoBehaviour
     /// Runs every frame.
     void Update()
     {
+        // root of avatar, midhip
+        // Compute MID_HIP dynamically as the midpoint of LEFT_HIP and RIGHT_HIP
+        Vector3 midHip = (receivedPose.LEFT_HIP + receivedPose.RIGHT_HIP) / 2;
+
+        // // compute estimated user height using MediaPipe landmarks
+        // float estimatedUserHeight = Vector3.Distance(receivedPose.LEFT_HIP, receivedPose.NOSE);
+        // // avatar's height in Unity space
+        // float avatarHeight = Vector3.Distance(avatarRoot.position, headTarget.position);
+        // // compute scale factor
+        // float dynamicScale = avatarHeight / estimatedUserHeight;
+
+        // Set avatar's root position to MID_HIP
+        avatarRoot.position = Vector3.Lerp(transform.position, midHip, Time.deltaTime * 5);
+
         // Smooth movement to avoid sudden jumps
-        leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPose.leftHand, Time.deltaTime * 5);
+        leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, receivedPose.LEFT_WRIST, Time.deltaTime * 5);
         // add more body parts here..
-        rightHandTarget.position = Vector3.Lerp(rightHandTarget.position, receivedPose.rightHand, Time.deltaTime * 5);
+        rightHandTarget.position = Vector3.Lerp(rightHandTarget.position, receivedPose.RIGHT_WRIST, Time.deltaTime * 5);
         // rightFootTarget.position = receivedPose.rightFoot;
         // leftFootTarget.position = receivedPose.leftFoot;
         // leftHandTarget.position = receivedPose.leftHand;
         // rightHandTarget.position = receivedPose.rightHand;
         // headTarget.position = receivedPose.head;
 
-        leftFootTarget.position = Vector3.Lerp(leftFootTarget.position, receivedPose.leftFoot, Time.deltaTime * 5);
-        rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, receivedPose.rightFoot, Time.deltaTime * 5);
+        leftFootTarget.position = Vector3.Lerp(leftFootTarget.position, receivedPose.LEFT_ANKLE, Time.deltaTime * 5);
+        rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, receivedPose.RIGHT_ANKLE, Time.deltaTime * 5);
 
-        headTarget.position = Vector3.Lerp(headTarget.position, receivedPose.head, Time.deltaTime * 5);
+        headTarget.position = Vector3.Lerp(headTarget.position, receivedPose.NOSE, Time.deltaTime * 5);
 
         // leftShoulderTarget.position = Vector3.Lerp(leftShoulderTarget.position, receivedPose.leftShoulder, Time.deltaTime * 5);
         // rightShoulderTarget.position = Vector3.Lerp(rightShoulderTarget.position, receivedPose.rightShoulder, Time.deltaTime * 5);
@@ -112,12 +145,11 @@ public class PoseReceiver : MonoBehaviour
     [System.Serializable]
     public class PoseData
     {
-        // public float x; // X coordinate of hand position
-        // public float y; // Y coordinate of hand position
-        // public float z; // Z coordinate (depth)
-        public Vector3 leftHand, rightHand, leftFoot, rightFoot;
-        public Vector3 head;
-        // leftShoulder, rightShoulder, spine, hips;
+        // public Vector3 leftHand, rightHand, leftFoot, rightFoot;
+        public Vector3 LEFT_WRIST, RIGHT_WRIST, LEFT_ANKLE, RIGHT_ANKLE, NOSE;
+
+        public Vector3 LEFT_HIP, RIGHT_HIP; // used for computing root of avatar
+        // public Vector3 head leftShoulder, rightShoulder, spine, hips;
         // public Vector3 leftElbow, rightElbow, leftKnee, rightKnee;
     }
 }
