@@ -1,6 +1,8 @@
 import socket
 import json
 import time
+import os
+from simple_landmark_reader import SimplePoseLandmarkReader
 
 # configure UDP socket
 UDP_IP = "127.0.0.1"    # local host IP as assume running on same device
@@ -14,21 +16,6 @@ frames = []
 buffer = ""
 
 with open("danny_poses.txt", "r") as file:
-    # for line in file:
-    #     line = line.strip()
-    #     if not line:
-    #         continue  # Skip empty lines
-
-    #     buffer += line  # Collect JSON dictionary lines
-
-    #     # Detect full JSON dictionary (closing bracket '}}')
-    #     if buffer.endswith("}{") or buffer.endswith("}}"):
-    #         try:
-    #             pose_frame = json.loads(buffer)  # Parse JSON (handles nested dictionaries)
-    #             frames.append(pose_frame)  # Store frame
-    #         except json.JSONDecodeError:
-    #             print("Skipping malformed frame.")
-    #         buffer = ""  # Reset buffer for next frame
     data = file.read()
 
 # Split into separate JSON objects by finding `{` and `}`
@@ -107,29 +94,6 @@ neutral_pose_mirror = {
 sock = socket.socket(socket.AF_INET,    # INTERNET
                      socket.SOCK_DGRAM) # UDP
 
-# test sending message - works
-# sock.sendto(TEST_MESSAGE.encode(), (UDP_IP, UDP_PORT))
-
-# while True:
-# pose_data = {"x": 0.5, "y": 1.0, "z": 0.0}  # Example (Replace with real tracking)
-# pose_data = poses[0]  # Example (Replace with real tracking)
-# sock.sendto(json.dumps(pose_data).encode(), (UDP_IP, UDP_PORT))
-
-# Loop through poses with delays to simulate real-time movement
-# for pose in poses:
-    # sock.sendto(json.dumps(pose).encode(), (UDP_IP, UDP_PORT))
-    # print(f"Sent pose: {json.dumps(pose, indent=2)}")
-    #time.sleep(2)  # Adjust timing for realistic animation feel
-
-# for i in range(5):
-#     sock.sendto(json.dumps(neutral_pose).encode(), (UDP_IP, UDP_PORT))
-#     time.sleep(1)
-#     sock.sendto(json.dumps(t_pose).encode(), (UDP_IP, UDP_PORT))
-#     time.sleep(1)
-#     sock.sendto(json.dumps(neutral_pose_mirror).encode(), (UDP_IP, UDP_PORT))
-#     time.sleep(1)
-#     print(f"Sent: {json.dumps(neutral_pose_mirror).encode()}")
-
 # Function to convert uppercase XYZ to lowercase xyz for Unity
 def convert_to_lowercase_xyz(keypoint):
     return {
@@ -138,7 +102,105 @@ def convert_to_lowercase_xyz(keypoint):
         "z": keypoint["Z"]
     }
 
-frame_count = 0
+#### FOR DANNY'S JSONs, USE THIS SECTION OF CODE ####
+
+# # Create a reader
+# reader = SimplePoseLandmarkReader()
+
+# # Access data
+# landmarks = reader.get_pose_landmarks("reference", 0, 0)  # Get landmarks for frame 0, pose 0
+# nose_pos = reader.get_landmark_position("reference", 0, "nose")  # Get NOSE landmark position
+
+# # Load data
+# reference_json = "reference_pose_landmarks.json"
+# test_json = "test_pose_landmarks.json"
+# normalized_json = "normalized_test_landmarks.json"
+
+# # Try to load the files
+# files_to_load = [
+#     (reference_json, "reference"),
+#     (test_json, "test"),
+#     (normalized_json, "normalized")
+# ]
+
+# loaded_files = []
+# for file_path, name in files_to_load:
+#     if os.path.exists(file_path):
+#         success = reader.load_json(file_path, name)
+#         if success:
+#             loaded_files.append(name)
+#             print(f"Loaded {name} dataset")
+
+# if not loaded_files:
+#     print("No data files found. Please make sure the JSON files are in the current directory.")
+#     print("Expecting files named:")
+#     for file_path, _ in files_to_load:
+#         print(f"  - {file_path}")
+#     exit(1)
+
+# print("\nAvailable datasets:", reader.list_datasets())
+
+# # Show sample usage
+# if loaded_files:
+#     dataset = loaded_files[0]  # Use the first loaded dataset (0 is ref, 1 is test, 2 is norm)
+#     print("DATASET IS: ")
+#     print(dataset)
+    
+#     print(f"\nSample usage for dataset '{dataset}':")
+#     print("\n1. Get the number of frames:")
+#     frame_count = reader.get_frame_count(dataset)
+#     print(f"   Number of frames: {frame_count}")
+    
+#     if frame_count > 0:
+#         print("\n2. Get data for frame 0:")
+#         frame_data = reader.get_frame(dataset, 0)
+#         print(f"   Frame index: {frame_data['frame']}")
+#         print(f"   Number of poses: {len(frame_data['poses'])}")
+        
+#         print("\n3. Get landmarks for pose 0 in frame 0:")
+#         landmarks = reader.get_pose_landmarks(dataset, 0, 0)
+#         print(f"   Number of landmarks: {len(landmarks)}")
+        
+#         print("\n4. Get position of the NOSE landmark in frame 0:")
+#         nose_pos = reader.get_landmark_position(dataset, 0, "nose", 0)
+#         print(f"   NOSE position: x={nose_pos['x']:.4f}, y={nose_pos['y']:.4f}, z={nose_pos['z']:.4f}")
+        
+#         print("\n5. Convert dataset to DataFrame and show first few rows:")
+#         print("   (This can be useful for pandas-based analysis)")
+#         df = reader.convert_to_dataframe(dataset)
+#         print(df.head())
+
+#     frame_rate = 1 / 22  # Simulating ~22 FPS
+#     for frame_idx in range(frame_count):
+#         # Extract only the required keypoints
+#         pose_data = {
+#             "LEFT_WRIST": reader.get_landmark_position(dataset, frame_idx, "left_wrist"),
+#             "RIGHT_WRIST": reader.get_landmark_position(dataset, frame_idx, "right_wrist"),
+#             "LEFT_ANKLE": reader.get_landmark_position(dataset, frame_idx, "left_ankle"),
+#             "RIGHT_ANKLE": reader.get_landmark_position(dataset, frame_idx, "right_ankle"),
+#             "NOSE": reader.get_landmark_position(dataset, frame_idx, "nose"),
+#             "LEFT_HIP": reader.get_landmark_position(dataset, frame_idx, "left_hip"),
+#             "RIGHT_HIP": reader.get_landmark_position(dataset, frame_idx, "right_hip"),
+#             "LEFT_SHOULDER": reader.get_landmark_position(dataset, frame_idx, "left_shoulder"),
+#             "RIGHT_SHOULDER": reader.get_landmark_position(dataset, frame_idx, "right_shoulder"),
+#             "LEFT_ELBOW": reader.get_landmark_position(dataset, frame_idx, "left_elbow"),
+#             "RIGHT_ELBOW": reader.get_landmark_position(dataset, frame_idx, "right_elbow")
+#         }
+#         # print(pose_data)
+
+#         # Convert to JSON
+#         json_data = json.dumps(pose_data)
+
+#         # Send over UDP
+#         sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
+        
+#         # print(f"Sent: {json_data}")
+#         time.sleep(frame_rate)  # Maintain real-time playback speed
+
+#### END DANNY'S JSONs parser code section  ####
+
+#### FOR AKUL'S JSONs, USE THIS SECTION OF CODE ####
+
 # Send frames one by one
 frame_rate = 1 / 22  # Simulating ~22 FPS
 for frame in frames:
@@ -150,7 +212,11 @@ for frame in frames:
         "RIGHT_ANKLE": convert_to_lowercase_xyz(frame["RIGHT_ANKLE"]),
         "NOSE": convert_to_lowercase_xyz(frame["NOSE"]),
         "LEFT_HIP": convert_to_lowercase_xyz(frame["LEFT_HIP"]),
-        "RIGHT_HIP": convert_to_lowercase_xyz(frame["RIGHT_HIP"])
+        "RIGHT_HIP": convert_to_lowercase_xyz(frame["RIGHT_HIP"]),
+        "LEFT_SHOULDER": convert_to_lowercase_xyz(frame["LEFT_SHOULDER"]),
+        "RIGHT_SHOULDER": convert_to_lowercase_xyz(frame["RIGHT_SHOULDER"]),
+        "LEFT_ELBOW": convert_to_lowercase_xyz(frame["LEFT_ELBOW"]),
+        "RIGHT_ELBOW": convert_to_lowercase_xyz(frame["RIGHT_ELBOW"])
     }
 
     # Convert to JSON
@@ -161,5 +227,3 @@ for frame in frames:
     
     print(f"Sent: {json_data}")
     time.sleep(frame_rate)  # Maintain real-time playback speed
-
-    frame_count += 1

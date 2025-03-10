@@ -124,6 +124,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 2559285840627121667, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
   m_PrefabInstance: {fileID: 2097249647}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &119959270 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -3480699329000672020, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
+  m_PrefabInstance: {fileID: 2097249647}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &219337131
 GameObject:
   m_ObjectHideFlags: 0
@@ -242,7 +247,7 @@ Transform:
   m_GameObject: {fileID: 330585543}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: 0, y: 1, z: 3}
+  m_LocalPosition: {x: 0, y: 0, z: 3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -602,7 +607,7 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: 8db9ba3bb9d8466479540d591136c8fa, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -2.785
+      value: -4.58
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: 8db9ba3bb9d8466479540d591136c8fa, type: 3}
       propertyPath: m_LocalPosition.y
@@ -906,6 +911,15 @@ MonoBehaviour:
   rightFootTarget: {fileID: 219337132}
   headTarget: {fileID: 1984460283}
   hipsTarget: {fileID: 1860318597}
+  avatarHips: {fileID: 1392960862}
+  avatarSpine: {fileID: 119959270}
+  avatarSpine1: {fileID: 1141002255}
+  avatarSpine2: {fileID: 2052353890}
+--- !u!4 &1141002255 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8021001004253913084, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
+  m_PrefabInstance: {fileID: 2097249647}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1145700811 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: -1812909498023395591, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
@@ -947,6 +961,11 @@ Transform:
   m_Children: []
   m_Father: {fileID: 1025638001}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!4 &1392960862 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5465940246521907071, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
+  m_PrefabInstance: {fileID: 2097249647}
+  m_PrefabAsset: {fileID: 0}
 --- !u!4 &1405583672 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8169382868667117632, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
@@ -1172,6 +1191,11 @@ MonoBehaviour:
     m_HintWeight: 1
     m_MaintainTargetPositionOffset: 0
     m_MaintainTargetRotationOffset: 0
+--- !u!4 &2052353890 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 366175167995203695, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
+  m_PrefabInstance: {fileID: 2097249647}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &2097249647
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -1220,6 +1244,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: -5950818470894562371, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
+      propertyPath: m_Materials.Array.size
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -5950818470894562371, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
+      propertyPath: 'm_Materials.Array.data[1]'
+      value: 
+      objectReference: {fileID: -5782344376741114641, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
     - target: {fileID: -3531332827177082916, guid: 2dc6a55a88d3da84396a4679123c03f9, type: 3}
       propertyPath: m_Name
       value: Guy_Humanoid
