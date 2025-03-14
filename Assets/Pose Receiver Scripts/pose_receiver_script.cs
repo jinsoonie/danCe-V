@@ -220,10 +220,6 @@ public class PoseReceiver : MonoBehaviour
         // Quaternion torsoRotation = Quaternion.LookRotation(torsoDirection, Vector3.up);
         Quaternion torsoRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
 
-        // avatarSpine.rotation = Quaternion.Slerp(avatarSpine.rotation, torsoRotation, Time.deltaTime * 5);
-        // avatarSpine1.rotation = Quaternion.Slerp(avatarSpine1.rotation, torsoRotation, Time.deltaTime * 3);
-        // avatarSpine2.rotation = Quaternion.Slerp(avatarSpine2.rotation, torsoRotation, Time.deltaTime * 2);
-
         // Blend between IK-controlled rotation and computed torso rotation
         float torsoBlendFactor = 0.9f; // Adjust between 0 (IK dominant) and 1 (fully manual rotation)
 

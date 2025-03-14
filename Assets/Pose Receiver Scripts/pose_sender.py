@@ -3,24 +3,87 @@ import json
 import time
 import os
 from simple_landmark_reader import SimplePoseLandmarkReader
+import cv2
+import mediapipe as mp
 
 # configure UDP socket
 UDP_IP = "127.0.0.1"    # local host IP as assume running on same device
 UDP_PORT = 5005         # as specified in Unity pose_receiver_script
-TEST_MESSAGE = "Hello Unity from Python!"
+TEST_MESSAGE = "Hello Unity from Python pose_sender.py!"
 
 print(f"message: {TEST_MESSAGE}")
+
+# init UDP socket
+sock = socket.socket(socket.AF_INET,    # INTERNET
+                     socket.SOCK_DGRAM) # UDP
+
+# SELECT WHICH MODE TO USE, True is for live capture of user CV, False is for reference mp4 .json
+USE_LIVE_CAMERA = True  # Set to False to send JSON instead
+
+# initialize MediaPipe Pose model
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose()
+
+if USE_LIVE_CAMERA:
+    print("Running in REAL-TIME mode (Live Camera)... Press 'q' to quit.")
+
+    # Open webcam
+    cap = cv2.VideoCapture(0)  # 0 = Default webcam
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            print("Camera feed lost!")
+            break
+
+        # Convert to RGB (for MediaPipe)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Process pose detection
+        results = pose.process(rgb_frame)
+        if results.pose_landmarks:
+            # Extract XYZ landmarks
+            pose_data = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
+
+            # Convert to JSON string
+            pose_json = json.dumps(pose_data)
+
+            # Send pose data over UDP directly to Unity, no json made
+            sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
+
+        # Show video output (optional)
+        cv2.imshow("Live Pose Tracking", frame)
+
+        # Capture at ~30 fps, Reduce CPU usage
+        time.sleep(1/30)  # ~30 FPS
+
+        # Quit on 'q' key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("Exiting live mode...")
+            break
+
+    # Cleanup
+    cap.release()
+    cv2.destroyAllWindows()
+    sock.close()
+    print("Camera and socket closed properly.")
+
+else:
+    print("Running in REPLAY mode (Reading JSON file)...")
+
+    # Add Akul / Danny json processing logic here
+    #
+    #
+    #
 
 # Read and process the .txt file
 frames = []
 buffer = ""
 
-with open("danny_poses.txt", "r") as file:
+with open(json_to_analyze, "r") as file:
     data = file.read()
 
 # Split into separate JSON objects by finding `{` and `}`
-frames = []
-buffer = ""
 depth = 0  # Tracks JSON object depth
 
 for char in data:
@@ -38,61 +101,6 @@ for char in data:
         except json.JSONDecodeError as e:
             print(f"Skipping invalid JSON frame: {e}")
         buffer = ""  # Reset buffer for the next frame
-
-neutral_pose = {
-    "LEFT_WRIST": {"x": -0.389, "y": 0.64, "z": 0.152},      # Arms extended horizontally
-    "rightHand": {"x": 0.194, "y": 0.496, "z": 0.328},
-    "leftFoot": {"x": -0.437, "y": -1.234, "z": 0.1838325},     
-    "rightFoot": {"x": 0.607, "y": -0.527, "z": 0.192467},
-    "head": {"x": 0.406, "y": 0.413, "z": 0.608},           # Head positioned naturally
-}
-
-t_pose = {
-    "LEFT_WRIST": {"x": -0.7, "y": 0.64, "z": 0.152},  
-    "rightHand": {"x": 0.7, "y": 0.64, "z": 0.152},
-    "leftFoot": {"x": -0.3, "y": -1.234, "z": 0.1838325},     
-    "rightFoot": {"x": 0.3, "y": -1.234, "z": 0.192467},
-    "head": {"x": 0.0, "y": 0.5, "z": 0.0}
-}
-
-neutral_pose_mirror = {
-    "LEFT_WRIST": {"x": -0.194, "y": 0.496, "z": 0.328},      
-    "rightHand": {"x": 0.389, "y": 0.64, "z": 0.152},
-    "leftFoot": {"x": 0.437, "y": -1.234, "z": 0.1838325},     
-    "rightFoot": {"x": -0.607, "y": -0.527, "z": 0.192467},
-    "head": {"x": -0.406, "y": 0.413, "z": 0.608}
-}
-
-
-
-'''"leftShoulder": {"x": -0.4, "y": 1.6, "z": 0.0},  
-    "rightShoulder": {"x": 0.4, "y": 1.6, "z": 0.0},
-    "spine": {"x": 0.0, "y": 1.3, "z": 0.0},          # Torso aligned
-    "hips": {"x": 0.0, "y": 1.0, "z": 0.0},           # Hips neutral position
-    "leftElbow": {"x": -0.6, "y": 1.5, "z": 0.0},     # Elbows at shoulder height
-    "rightElbow": {"x": 0.6, "y": 1.5, "z": 0.0},
-    "leftKnee": {"x": -0.15, "y": 0.5, "z": 0.0},     # Legs straight
-    "rightKnee": {"x": 0.15, "y": 0.5, "z": 0.0}'''
-
-'''"leftHand": {"x": 3.782351e-10, "y": 0.2527094, "z": 5.080531e-10},      # Arms extended horizontally
-    "rightHand": {"x": -3.577438e-10, "y": 0.2527121, "z": -2.266648e-11},
-    "leftFoot": {"x": 1.099628e-10, "y": 0.07426425, "z": 0.0},     # Feet aligned with body
-    "rightFoot": {"x": -1.265703e-10, "y": 0.07426425, "z": -2.383091e-11},
-    "head": {"x": 0.0, "y": 0.06762298, "z": 0.03044908},           # Head positioned naturally
-    "leftShoulder": {"x": -0.4, "y": 1.6, "z": 0.0},  # Shoulder width position
-    "rightShoulder": {"x": 0.4, "y": 1.6, "z": 0.0},
-    "spine": {"x": 0.0, "y": 1.3, "z": 0.0},          # Torso aligned
-    "hips": {"x": 0.0, "y": 1.0, "z": 0.0},           # Hips neutral position
-    "leftElbow": {"x": -0.6, "y": 1.5, "z": 0.0},     # Elbows at shoulder height
-    "rightElbow": {"x": 0.6, "y": 1.5, "z": 0.0},
-    "leftKnee": {"x": -0.15, "y": 0.5, "z": 0.0},     # Legs straight
-    "rightKnee": {"x": 0.15, "y": 0.5, "z": 0.0} '''
-    
-
-
-# init UDP socket
-sock = socket.socket(socket.AF_INET,    # INTERNET
-                     socket.SOCK_DGRAM) # UDP
 
 # Function to convert uppercase XYZ to lowercase xyz for Unity
 def convert_to_lowercase_xyz(keypoint):
@@ -170,7 +178,7 @@ def convert_to_lowercase_xyz(keypoint):
 #         df = reader.convert_to_dataframe(dataset)
 #         print(df.head())
 
-#     frame_rate = 1 / 22  # Simulating ~22 FPS
+#     frame_rate = 1 / 30  # Simulating ~30 FPS
 #     for frame_idx in range(frame_count):
 #         # Extract only the required keypoints
 #         pose_data = {
@@ -202,7 +210,7 @@ def convert_to_lowercase_xyz(keypoint):
 #### FOR AKUL'S JSONs, USE THIS SECTION OF CODE ####
 
 # Send frames one by one
-frame_rate = 1 / 22  # Simulating ~22 FPS
+frame_rate = 1 / 30  # Simulating ~30 FPS
 for frame in frames:
     # Extract only the required keypoints
     pose_data = {
