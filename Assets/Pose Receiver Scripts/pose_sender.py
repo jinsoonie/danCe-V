@@ -1,10 +1,10 @@
+import mediapipe as mp
 import socket
 import json
 import time
 import os
 from simple_landmark_reader import SimplePoseLandmarkReader
 import cv2
-import mediapipe as mp
 
 # configure UDP socket
 UDP_IP = "127.0.0.1"    # local host IP as assume running on same device
@@ -22,6 +22,8 @@ USE_LIVE_CAMERA = True  # Set to False to send JSON instead
 
 # initialize MediaPipe Pose model
 mp_pose = mp.solutions.pose
+mp_drawing = mp.solutions.drawing_utils  # Drawing utility
+mp_drawing_styles = mp.solutions.drawing_styles  # Styles
 pose = mp_pose.Pose()
 
 if USE_LIVE_CAMERA:
@@ -41,12 +43,31 @@ if USE_LIVE_CAMERA:
 
         # Process pose detection
         results = pose.process(rgb_frame)
+
         if results.pose_landmarks:
+            # Draw landmarks on the original frame (BGR)
+            mp_drawing.draw_landmarks(
+                frame, 
+                results.pose_landmarks, 
+                mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+            )
+
             # Extract XYZ landmarks
-            pose_data = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
+            # pose_data = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
+            landmarks_data = {}
+            for landmark_enum in mp_pose.PoseLandmark:
+                idx = landmark_enum.value  # Get landmark index
+                landmark = results.pose_landmarks.landmark[idx]
+                landmarks_data[landmark_enum.name] = {
+                    "x": round(landmark.x, 4),
+                    "y": round(landmark.y, 4),
+                    "z": round(landmark.z, 4)
+                }
 
             # Convert to JSON string
-            pose_json = json.dumps(pose_data)
+            pose_json = json.dumps(landmarks_data)
+            print(pose_json)
 
             # Send pose data over UDP directly to Unity, no json made
             sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
@@ -65,8 +86,8 @@ if USE_LIVE_CAMERA:
     # Cleanup
     cap.release()
     cv2.destroyAllWindows()
-    sock.close()
-    print("Camera and socket closed properly.")
+    # sock.close()
+    print("Camera closed properly.")
 
 else:
     print("Running in REPLAY mode (Reading JSON file)...")
@@ -75,6 +96,8 @@ else:
     #
     #
     #
+
+json_to_analyze = "danny_poses.txt"
 
 # Read and process the .txt file
 frames = []
