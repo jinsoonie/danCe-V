@@ -1,6 +1,6 @@
 # Ignore all the Unity's import/export
 # meta data files (with *.meta extension):
-**/*.meta
+# **/*.meta
 
 # Ignore these folders completely
 # they will be filled by Unity when you
