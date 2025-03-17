@@ -3,6 +3,8 @@ import socket
 import json
 import time
 import os
+import sys
+import string
 from simple_landmark_reader import SimplePoseLandmarkReader
 import cv2
 
@@ -18,7 +20,7 @@ sock = socket.socket(socket.AF_INET,    # INTERNET
                      socket.SOCK_DGRAM) # UDP
 
 # SELECT WHICH MODE TO USE, True is for live capture of user CV, False is for reference mp4 .json
-USE_LIVE_CAMERA = True  # Set to False to send JSON instead
+# USE_LIVE_CAMERA = False  # Set to False to send JSON instead
 
 # initialize MediaPipe Pose model
 mp_pose = mp.solutions.pose
@@ -26,104 +28,115 @@ mp_drawing = mp.solutions.drawing_utils  # Drawing utility
 mp_drawing_styles = mp.solutions.drawing_styles  # Styles
 pose = mp_pose.Pose()
 
-if USE_LIVE_CAMERA:
-    print("Running in REAL-TIME mode (Live Camera)... Press 'q' to quit.")
+# json_to_analyze for akul/danny's json
+script_dir = os.path.dirname(os.path.abspath(__file__))  # Get directory of the script
+json_to_analyze = os.path.join(script_dir, "danny_poses.txt")  # full path
 
-    # Open webcam
-    cap = cv2.VideoCapture(0)  # 0 = Default webcam
+# when this script invoked, USE_LIVE_CAMERA is arg1, videoPath is arg2 (only used when arg1 = True)
+def main(USE_LIVE_CAMERA, videoPath=""):
+    if USE_LIVE_CAMERA == "true":
+        print("Running in REAL-TIME mode (Live Camera)... Press 'q' to quit.")
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            print("Camera feed lost!")
-            break
+        # Open webcam
+        cap = cv2.VideoCapture(0)  # 0 = Default webcam
 
-        # Convert to RGB (for MediaPipe)
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                print("Camera feed lost!")
+                break
 
-        # Process pose detection
-        results = pose.process(rgb_frame)
+            # Convert to RGB (for MediaPipe)
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        if results.pose_landmarks:
-            # Draw landmarks on the original frame (BGR)
-            mp_drawing.draw_landmarks(
-                frame, 
-                results.pose_landmarks, 
-                mp_pose.POSE_CONNECTIONS,
-                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
-            )
+            # Process pose detection
+            results = pose.process(rgb_frame)
 
-            # Extract XYZ landmarks
-            # pose_data = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
-            landmarks_data = {}
-            for landmark_enum in mp_pose.PoseLandmark:
-                idx = landmark_enum.value  # Get landmark index
-                landmark = results.pose_landmarks.landmark[idx]
-                landmarks_data[landmark_enum.name] = {
-                    "x": round(landmark.x, 4),
-                    "y": round(landmark.y, 4),
-                    "z": round(landmark.z, 4)
-                }
+            if results.pose_landmarks:
+                # Draw landmarks on the original frame (BGR)
+                mp_drawing.draw_landmarks(
+                    frame, 
+                    results.pose_landmarks, 
+                    mp_pose.POSE_CONNECTIONS,
+                    landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+                )
 
-            # Convert to JSON string
-            pose_json = json.dumps(landmarks_data)
-            print(pose_json)
+                # Extract XYZ landmarks
+                # pose_data = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
+                landmarks_data = {}
+                for landmark_enum in mp_pose.PoseLandmark:
+                    idx = landmark_enum.value  # Get landmark index
+                    landmark = results.pose_landmarks.landmark[idx]
+                    landmarks_data[landmark_enum.name] = {
+                        "x": round(landmark.x, 4),
+                        "y": round(landmark.y, 4),
+                        "z": round(landmark.z, 4)
+                    }
 
-            # Send pose data over UDP directly to Unity, no json made
-            sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
+                # Convert to JSON string
+                pose_json = json.dumps(landmarks_data)
+                print(pose_json)
 
-        # Show video output (optional)
-        cv2.imshow("Live Pose Tracking", frame)
+                # Send pose data over UDP directly to Unity, no json made
+                sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
 
-        # Capture at ~30 fps, Reduce CPU usage
-        time.sleep(1/30)  # ~30 FPS
+            # Show video output (optional)
+            cv2.imshow("Live Pose Tracking", frame)
 
-        # Quit on 'q' key press
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            print("Exiting live mode...")
-            break
+            # Capture at ~30 fps, Reduce CPU usage
+            time.sleep(1/30)  # ~30 FPS
 
-    # Cleanup
-    cap.release()
-    cv2.destroyAllWindows()
-    # sock.close()
-    print("Camera closed properly.")
+            # Quit on 'q' key press
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                print("Exiting live mode...")
+                break
 
-else:
-    print("Running in REPLAY mode (Reading JSON file)...")
+        # Cleanup
+        cap.release()
+        cv2.destroyAllWindows()
+        # sock.close()
+        print("Camera closed properly.")
 
-    # Add Akul / Danny json processing logic here
-    #
-    #
-    #
+    else:
+        print("Running in REPLAY mode (Reading JSON file)...")
 
-json_to_analyze = "danny_poses.txt"
+        # Add Akul / Danny json processing logic here
+        #
 
-# Read and process the .txt file
-frames = []
-buffer = ""
+        # init frames, to be populated and sent to unity
+        frames = []
 
-with open(json_to_analyze, "r") as file:
-    data = file.read()
+        ### NEED TO ADD CV CODE FOR MAKING .mp4 INTO json
+        # i.e. use videoPath arg
+        frames = parse_akul_json(frames)
+        send_akul_json_to_unity(frames)
 
-# Split into separate JSON objects by finding `{` and `}`
-depth = 0  # Tracks JSON object depth
+def parse_akul_json(frames):
+    with open(json_to_analyze, "r") as file:
+        data = file.read()
 
-for char in data:
-    buffer += char
-    if char == "{":
-        depth += 1
-    elif char == "}":
-        depth -= 1
+    # Split into separate JSON objects by finding `{` and `}`
+    depth = 0  # Tracks JSON object depth
+    buffer = ""
 
-    # If depth reaches zero, have a complete JSON object
-    if depth == 0 and buffer.strip():
-        try:
-            frame = json.loads(buffer)  # Parse JSON
-            frames.append(frame)
-        except json.JSONDecodeError as e:
-            print(f"Skipping invalid JSON frame: {e}")
-        buffer = ""  # Reset buffer for the next frame
+    for char in data:
+        buffer += char
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+
+        # If depth reaches zero, have a complete JSON object
+        if depth == 0 and buffer.strip():
+            try:
+                frame = json.loads(buffer)  # Parse JSON
+                frames.append(frame)
+            except json.JSONDecodeError as e:
+                print(f"Skipping invalid JSON frame: {e}")
+            buffer = ""  # Reset buffer for the next frame
+    
+    return frames
+    
 
 # Function to convert uppercase XYZ to lowercase xyz for Unity
 def convert_to_lowercase_xyz(keypoint):
@@ -232,29 +245,39 @@ def convert_to_lowercase_xyz(keypoint):
 
 #### FOR AKUL'S JSONs, USE THIS SECTION OF CODE ####
 
-# Send frames one by one
-frame_rate = 1 / 30  # Simulating ~30 FPS
-for frame in frames:
-    # Extract only the required keypoints
-    pose_data = {
-        "LEFT_WRIST": convert_to_lowercase_xyz(frame["LEFT_WRIST"]),
-        "RIGHT_WRIST": convert_to_lowercase_xyz(frame["RIGHT_WRIST"]),
-        "LEFT_ANKLE": convert_to_lowercase_xyz(frame["LEFT_ANKLE"]),
-        "RIGHT_ANKLE": convert_to_lowercase_xyz(frame["RIGHT_ANKLE"]),
-        "NOSE": convert_to_lowercase_xyz(frame["NOSE"]),
-        "LEFT_HIP": convert_to_lowercase_xyz(frame["LEFT_HIP"]),
-        "RIGHT_HIP": convert_to_lowercase_xyz(frame["RIGHT_HIP"]),
-        "LEFT_SHOULDER": convert_to_lowercase_xyz(frame["LEFT_SHOULDER"]),
-        "RIGHT_SHOULDER": convert_to_lowercase_xyz(frame["RIGHT_SHOULDER"]),
-        "LEFT_ELBOW": convert_to_lowercase_xyz(frame["LEFT_ELBOW"]),
-        "RIGHT_ELBOW": convert_to_lowercase_xyz(frame["RIGHT_ELBOW"])
-    }
+def send_akul_json_to_unity(frames):
+    # Send frames one by one
+    frame_rate = 1 / 30  # Simulating ~30 FPS
+    for frame in frames:
+        # Extract only the required keypoints
+        pose_data = {
+            "LEFT_WRIST": convert_to_lowercase_xyz(frame["LEFT_WRIST"]),
+            "RIGHT_WRIST": convert_to_lowercase_xyz(frame["RIGHT_WRIST"]),
+            "LEFT_ANKLE": convert_to_lowercase_xyz(frame["LEFT_ANKLE"]),
+            "RIGHT_ANKLE": convert_to_lowercase_xyz(frame["RIGHT_ANKLE"]),
+            "NOSE": convert_to_lowercase_xyz(frame["NOSE"]),
+            "LEFT_HIP": convert_to_lowercase_xyz(frame["LEFT_HIP"]),
+            "RIGHT_HIP": convert_to_lowercase_xyz(frame["RIGHT_HIP"]),
+            "LEFT_SHOULDER": convert_to_lowercase_xyz(frame["LEFT_SHOULDER"]),
+            "RIGHT_SHOULDER": convert_to_lowercase_xyz(frame["RIGHT_SHOULDER"]),
+            "LEFT_ELBOW": convert_to_lowercase_xyz(frame["LEFT_ELBOW"]),
+            "RIGHT_ELBOW": convert_to_lowercase_xyz(frame["RIGHT_ELBOW"])
+        }
 
-    # Convert to JSON
-    json_data = json.dumps(pose_data)
+        # Convert to JSON
+        json_data = json.dumps(pose_data)
 
-    # Send over UDP
-    sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
-    
-    print(f"Sent: {json_data}")
-    time.sleep(frame_rate)  # Maintain real-time playback speed
+        # Send over UDP
+        sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
+        
+        print(f"Sent: {json_data}")
+        time.sleep(frame_rate)  # Maintain real-time playback speed
+
+if __name__ == '__main__':
+    USE_LIVE_CAMERA = sys.argv[1].lower()
+    if (USE_LIVE_CAMERA == "true"):
+        main(USE_LIVE_CAMERA)
+    elif (USE_LIVE_CAMERA == "false"):
+        main(USE_LIVE_CAMERA, sys.argv[2])  # sys.argv[2] is path to .mp4
+    else:
+        print("ERRROR, USAGE: python pose_sender.py [USE_LIVE_CAMERA bool] (PATH_TO_MP4_IF_NOT_LIVE)")

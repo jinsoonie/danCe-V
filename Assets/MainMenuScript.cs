@@ -34,6 +34,9 @@ public class MainMenuScript : MonoBehaviour
             UnityEngine.Debug.Log("Processing .mp4 video: " + Path.GetFileName(videoPath));
             UnityEngine.Debug.Log("Application.dataPath (game path) is detected as: " + Application.dataPath);
 
+            UnityEngine.Debug.Log("Running Dance Avatar Scene.. Awaiting Coords");
+            SceneManager.LoadSceneAsync("Dance Avatar Scene");
+
             RunPythonProcessVideo(videoPath);
         }
     }
@@ -44,24 +47,42 @@ public class MainMenuScript : MonoBehaviour
     void RunPythonProcessVideo(string videoPath)
     {
         string pythonPath = "python"; // Ensure Python is installed on the device first!
-        string scriptPath = Application.dataPath + "/pose_sender.py"; // pose_sender.py script in game folder
+        string scriptPath = Application.dataPath + "/Pose Receiver Scripts/pose_sender.py"; // pose_sender.py script in game folder
+
+        UnityEngine.Debug.Log($"Running Python Script: {scriptPath}");
 
         // setup the python execution "Process"
+        // False here for USE_LIVE_CAMERA for now
         ProcessStartInfo processInfo = new ProcessStartInfo
         {
             FileName = pythonPath,
-            Arguments = $"\"{scriptPath}\" \"{videoPath}\"",
+            Arguments = $"\"{scriptPath}\" False \"{videoPath}\"",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = true
+            CreateNoWindow = false
         };
 
         Process process = new Process { StartInfo = processInfo };
-        process.Start();
-        process.WaitForExit();
 
-        UnityEngine.Debug.Log("Python process exited! Should have sent coords");
+        // Attach asynchronous event handlers
+        process.OutputDataReceived += (sender, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+                UnityEngine.Debug.Log($"Python Output: {args.Data}");
+        };
+
+        process.ErrorDataReceived += (sender, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+                UnityEngine.Debug.Log($"Python Error: {args.Data}");
+        };
+
+        process.Start();
+
+        process.BeginOutputReadLine(); // Asynchronously read output
+        process.BeginErrorReadLine();  // Asynchronously read error
+        UnityEngine.Debug.Log("Python process started asynchronously! Unity will keep running.");
 
         // string jsonPath = videoPath.Replace(".mp4", "_pose.json");
         // StartCoroutine(ReadJsonAfterProcessing(jsonPath));
