@@ -34,16 +34,14 @@ public class MainMenuScript : MonoBehaviour
             UnityEngine.Debug.Log("Processing .mp4 video: " + Path.GetFileName(videoPath));
             UnityEngine.Debug.Log("Application.dataPath (game path) is detected as: " + Application.dataPath);
 
-            UnityEngine.Debug.Log("Running Dance Avatar Scene.. Awaiting Coords");
             SceneManager.LoadSceneAsync("Dance Avatar Scene");
 
             RunPythonProcessVideo(videoPath);
         }
     }
 
-    // RunPythonProcessVideo not being used right now -- NOW NEED TO USE VIDEO PATH, and have it executed through the python script
-    // need to modify python script so that if ran with video path as argument, then it does .mp4 analysis
-    // else then just do CV for user live input
+    // RunPythonProcessVideo used for if specified videoPath .mp4 reference video
+    // ensure non-blocking (unity keeps running to receive .mp4 reference video .json coords)
     void RunPythonProcessVideo(string videoPath)
     {
         string pythonPath = "python"; // Ensure Python is installed on the device first!

@@ -19,9 +19,6 @@ print(f"message: {TEST_MESSAGE}")
 sock = socket.socket(socket.AF_INET,    # INTERNET
                      socket.SOCK_DGRAM) # UDP
 
-# SELECT WHICH MODE TO USE, True is for live capture of user CV, False is for reference mp4 .json
-# USE_LIVE_CAMERA = False  # Set to False to send JSON instead
-
 # initialize MediaPipe Pose model
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils  # Drawing utility
@@ -33,83 +30,89 @@ script_dir = os.path.dirname(os.path.abspath(__file__))  # Get directory of the 
 json_to_analyze = os.path.join(script_dir, "danny_poses.txt")  # full path
 
 # when this script invoked, USE_LIVE_CAMERA is arg1, videoPath is arg2 (only used when arg1 = True)
+# SELECT WHICH MODE TO USE, USE_LIVE_CAMERA True is for live capture of user CV, False is for reference mp4 .json
 def main(USE_LIVE_CAMERA, videoPath=""):
     if USE_LIVE_CAMERA == "true":
         print("Running in REAL-TIME mode (Live Camera)... Press 'q' to quit.")
 
-        # Open webcam
+        # Open webcam for live feed
         cap = cv2.VideoCapture(0)  # 0 = Default webcam
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                print("Camera feed lost!")
-                break
-
-            # Convert to RGB (for MediaPipe)
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-            # Process pose detection
-            results = pose.process(rgb_frame)
-
-            if results.pose_landmarks:
-                # Draw landmarks on the original frame (BGR)
-                mp_drawing.draw_landmarks(
-                    frame, 
-                    results.pose_landmarks, 
-                    mp_pose.POSE_CONNECTIONS,
-                    landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
-                )
-
-                # Extract XYZ landmarks
-                # pose_data = [[lm.x, lm.y, lm.z] for lm in results.pose_landmarks.landmark]
-                landmarks_data = {}
-                for landmark_enum in mp_pose.PoseLandmark:
-                    idx = landmark_enum.value  # Get landmark index
-                    landmark = results.pose_landmarks.landmark[idx]
-                    landmarks_data[landmark_enum.name] = {
-                        "x": round(landmark.x, 4),
-                        "y": round(landmark.y, 4),
-                        "z": round(landmark.z, 4)
-                    }
-
-                # Convert to JSON string
-                pose_json = json.dumps(landmarks_data)
-                print(pose_json)
-
-                # Send pose data over UDP directly to Unity, no json made
-                sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
-
-            # Show video output (optional)
-            cv2.imshow("Live Pose Tracking", frame)
-
-            # Capture at ~30 fps, Reduce CPU usage
-            time.sleep(1/30)  # ~30 FPS
-
-            # Quit on 'q' key press
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("Exiting live mode...")
-                break
-
-        # Cleanup
-        cap.release()
-        cv2.destroyAllWindows()
-        # sock.close()
-        print("Camera closed properly.")
-
     else:
         print("Running in REPLAY mode (Reading JSON file)...")
 
-        # Add Akul / Danny json processing logic here
-        #
+        # Open videoPath .mp4
+        cap = cv2.VideoCapture(videoPath)
 
-        # init frames, to be populated and sent to unity
-        frames = []
+    # based on USE_LIVE_CAMERA, run CV on live feed or videoPath .mp4
+    while cap.isOpened():
+        ret, frame = cap.read()
+        # If either reached end of .mp4 OR Live Camera Feed Ended
+        if not ret:
+            print("End of video or Live Camera feed lost!")
+            break
 
-        ### NEED TO ADD CV CODE FOR MAKING .mp4 INTO json
-        # i.e. use videoPath arg
-        frames = parse_akul_json(frames)
-        send_akul_json_to_unity(frames)
+        # Convert to RGB (for MediaPipe)
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Process pose detection
+        results = pose.process(rgb_frame)
+
+        if results.pose_landmarks:
+            # Draw landmarks on the original frame (BGR)
+            mp_drawing.draw_landmarks(
+                frame, 
+                results.pose_landmarks, 
+                mp_pose.POSE_CONNECTIONS,
+                landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
+            )
+
+            # Extract XYZ landmarks
+            landmarks_data = {}
+            for landmark_enum in mp_pose.PoseLandmark:
+                idx = landmark_enum.value  # Get landmark index
+                landmark = results.pose_landmarks.landmark[idx]
+                landmarks_data[landmark_enum.name] = {
+                    "x": round(landmark.x, 4),
+                    "y": round(landmark.y, 4),
+                    "z": round(landmark.z, 4)
+                }
+
+            # Convert to JSON string
+            pose_json = json.dumps(landmarks_data)
+            # print(pose_json)
+
+            # Send pose data over UDP directly to Unity, no json made
+            sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
+
+        # Show video output (optional)
+        cv2.imshow("Live Pose Tracking", frame)
+
+        # Capture at ~30 fps, Reduce CPU usage
+        time.sleep(1/30)  # ~30 FPS
+
+        # Quit on 'q' key press
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("Exiting live mode...")
+            break
+
+    # Cleanup
+    cap.release()
+    cv2.destroyAllWindows()
+    print("Camera closed properly.")
+
+    # else:
+    #     print("Running in REPLAY mode (Reading JSON file)...")
+
+    #     # Add Akul / Danny json processing logic here
+    #     #
+
+    #     # init frames, to be populated and sent to unity
+    #     frames = []
+
+    #     ### NEED TO ADD CV CODE FOR MAKING .mp4 INTO json
+    #     # i.e. use videoPath arg
+    #     frames = parse_akul_json(frames)
+    #     send_akul_json_to_unity(frames)
 
 def parse_akul_json(frames):
     with open(json_to_analyze, "r") as file:
@@ -270,11 +273,12 @@ def send_akul_json_to_unity(frames):
         # Send over UDP
         sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
         
-        print(f"Sent: {json_data}")
+        # print(f"Sent: {json_data}")
         time.sleep(frame_rate)  # Maintain real-time playback speed
 
 if __name__ == '__main__':
     USE_LIVE_CAMERA = sys.argv[1].lower()
+    print(f"pose_sender CALLED with: {sys.argv}")
     if (USE_LIVE_CAMERA == "true"):
         main(USE_LIVE_CAMERA)
     elif (USE_LIVE_CAMERA == "false"):
