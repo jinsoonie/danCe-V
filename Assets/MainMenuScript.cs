@@ -50,11 +50,12 @@ public class MainMenuScript : MonoBehaviour
         UnityEngine.Debug.Log($"Running Python Script: {scriptPath}");
 
         // setup the python execution "Process"
-        // False here for USE_LIVE_CAMERA for now
+        // False for USE_LIVE_CAMERA, False for send_preformed_json (since analyzing ref .mp4 here, not sending_preformed_json)
+        // CAN CHANGE FOR TESTING THE MAIN MENU SCENE, HOWEVER
         ProcessStartInfo processInfo = new ProcessStartInfo
         {
             FileName = pythonPath,
-            Arguments = $"\"{scriptPath}\" False \"{videoPath}\"",
+            Arguments = $"\"{scriptPath}\" False \"{videoPath}\" False",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -84,17 +85,19 @@ public class MainMenuScript : MonoBehaviour
 
         // string jsonPath = videoPath.Replace(".mp4", "_pose.json");
         // StartCoroutine(ReadJsonAfterProcessing(jsonPath));
+
+        ////////////////// ADDDDDDDDDDDD CODE FOR OTHER PROCESSING PYTHON pose_sender.py CALLS for 2 avatars!! (2 pose_sender.py instances, 1for ref .mp4, 1 for live cap)
     }
 
-    IEnumerator ReadJsonAfterProcessing(string jsonPath)
-    {
-        while (!File.Exists(jsonPath))  // Wait for Python to generate the file
-        {
-            yield return new WaitForSeconds(1);
-        }
+    // IEnumerator ReadJsonAfterProcessing(string jsonPath)
+    // {
+    //     while (!File.Exists(jsonPath))  // Wait for Python to generate the file
+    //     {
+    //         yield return new WaitForSeconds(1);
+    //     }
 
-        string jsonContent = File.ReadAllText(jsonPath);
-        statusText.text = "Analysis complete! reference .mp4 dance JSON received.";
-        UnityEngine.Debug.Log("Pose Data: " + jsonContent);
-    }
+    //     string jsonContent = File.ReadAllText(jsonPath);
+    //     statusText.text = "Analysis complete! reference .mp4 dance JSON received.";
+    //     UnityEngine.Debug.Log("Pose Data: " + jsonContent);
+    // }
 }

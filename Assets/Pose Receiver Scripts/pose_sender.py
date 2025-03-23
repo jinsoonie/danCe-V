@@ -8,17 +8,6 @@ import string
 from simple_landmark_reader import SimplePoseLandmarkReader
 import cv2
 
-# configure UDP socket
-UDP_IP = "127.0.0.1"    # local host IP as assume running on same device
-UDP_PORT = 5005         # as specified in Unity pose_receiver_script
-TEST_MESSAGE = "Hello Unity from Python pose_sender.py!"
-
-print(f"message: {TEST_MESSAGE}")
-
-# init UDP socket
-sock = socket.socket(socket.AF_INET,    # INTERNET
-                     socket.SOCK_DGRAM) # UDP
-
 # initialize MediaPipe Pose model
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils  # Drawing utility
@@ -28,21 +17,51 @@ pose = mp_pose.Pose()
 # json_to_analyze for akul/danny's json
 script_dir = os.path.dirname(os.path.abspath(__file__))  # Get directory of the script
 json_to_analyze = os.path.join(script_dir, "danny_poses.txt")  # full path
+pose_filename = os.path.join(script_dir, "ref_mp4_pose_data.json")  # Save JSON in same directory
 
-# when this script invoked, USE_LIVE_CAMERA is arg1, videoPath is arg2 (only used when arg1 = True)
+
+# when this script invoked, USE_LIVE_CAMERA is arg1, videoPath is arg2 (only used when arg1 = True), send_preformed_json is arg3 (for only sending .json to unity)
 # SELECT WHICH MODE TO USE, USE_LIVE_CAMERA True is for live capture of user CV, False is for reference mp4 .json
-def main(USE_LIVE_CAMERA, videoPath=""):
+ref_mp4_pose_data_list = []     # list to store ref_mp4_pose data (py list of jsons)
+def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
+    # configure UDP socket
+    UDP_IP = "127.0.0.1"    # local host IP as assume running on same device
+    UDP_PORT = None         # default value None (if UDP_PORT is none later, failed to init port)
+    TEST_MESSAGE = "Hello Unity from Python pose_sender.py!"
+
+    print(f"message: {TEST_MESSAGE}")
+
+    # init UDP socket
+    sock = socket.socket(socket.AF_INET,    # INTERNET
+                        socket.SOCK_DGRAM)  # UDP
+    
     if USE_LIVE_CAMERA == "true":
         print("Running in REAL-TIME mode (Live Camera)... Press 'q' to quit.")
 
+        # assign UDP_PORT for pose_receiver_script_right_live
+        UDP_PORT = 5005
+
         # Open webcam for live feed
         cap = cv2.VideoCapture(0)  # 0 = Default webcam
+
     else:
-        print("Running in REPLAY mode (Reading JSON file)...")
+        print("Running in REPLAY mode...")
+
+        # assign UDP_PORT for pose_receiver_script_left_ref
+        UDP_PORT = 5006
+
+        # if send_preformed_json, then only run send_preformed_json and prematurely end main func
+        if (str(send_preformed_json).lower() == "true"):
+            print(f"Sending Preformed .json selected... taking {pose_filename} and sending to {UDP_PORT} in Unity")
+            # func here just to decode json and send frames
+            send_json_to_unity(pose_filename, sock, UDP_IP, UDP_PORT)
+            return
 
         # Open videoPath .mp4
         cap = cv2.VideoCapture(videoPath)
 
+
+    print(f"Opening cap with UDP_PORT: {UDP_PORT}...")
     # based on USE_LIVE_CAMERA, run CV on live feed or videoPath .mp4
     while cap.isOpened():
         ret, frame = cap.read()
@@ -77,6 +96,9 @@ def main(USE_LIVE_CAMERA, videoPath=""):
                     "z": round(landmark.z, 4)
                 }
 
+            # before convert to JSON, add xyz frame to ref_mp4_pose_data_list
+            ref_mp4_pose_data_list.append(landmarks_data)
+
             # Convert to JSON string
             pose_json = json.dumps(landmarks_data)
             # print(pose_json)
@@ -94,6 +116,13 @@ def main(USE_LIVE_CAMERA, videoPath=""):
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Exiting live mode...")
             break
+
+    # Save to JSON file for later use (if reference .mp4 version)
+    if USE_LIVE_CAMERA == "false":
+        with open(pose_filename, "w") as f:
+            json.dump(ref_mp4_pose_data_list, f, indent=4)
+
+        print(f"Pose data saved to {os.path.abspath(pose_filename)}")
 
     # Cleanup
     cap.release()
@@ -113,6 +142,49 @@ def main(USE_LIVE_CAMERA, videoPath=""):
     #     # i.e. use videoPath arg
     #     frames = parse_akul_json(frames)
     #     send_akul_json_to_unity(frames)
+
+def send_json_to_unity(pose_filename, sock, UDP_IP, UDP_PORT):
+    """
+    Load a JSON file containing a list of pose frames and send selected keypoints to Unity over UDP.
+    
+    Args:
+        pose_filename (str): Path to the JSON file.
+        sock (socket.socket): The UDP socket used for transmission.
+        UDP_IP (str): The target IP address.
+        UDP_PORT (int): The target UDP port.
+    """
+    # Load the saved pose frames from the JSON file
+    with open(pose_filename, "r") as f:
+        frames = json.load(f)
+
+    frame_rate = 1 / 30  # Simulate ~30 FPS
+    for frame in frames:
+        # Extract only the required keypoints, converting their coordinate dicts
+        pose_data = {
+            "LEFT_WRIST": frame.get("LEFT_WRIST", {}),
+            "RIGHT_WRIST": frame.get("RIGHT_WRIST", {}),
+            "LEFT_ANKLE": frame.get("LEFT_ANKLE", {}),
+            "RIGHT_ANKLE": frame.get("RIGHT_ANKLE", {}),
+            "NOSE": frame.get("NOSE", {}),
+            "LEFT_HIP": frame.get("LEFT_HIP", {}),
+            "RIGHT_HIP": frame.get("RIGHT_HIP", {}),
+            "LEFT_SHOULDER": frame.get("LEFT_SHOULDER", {}),
+            "RIGHT_SHOULDER": frame.get("RIGHT_SHOULDER", {}),
+            "LEFT_ELBOW": frame.get("LEFT_ELBOW", {}),
+            "RIGHT_ELBOW": frame.get("RIGHT_ELBOW", {})
+        }
+        
+        # Convert the selected keypoints to a JSON string
+        json_data = json.dumps(pose_data)
+        
+        # Send the JSON string over UDP
+        sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
+        
+        # Optional: uncomment for debugging
+        # print(f"Sent: {json_data}")
+        
+        # Sleep to simulate real-time playback (~30 FPS)
+        time.sleep(frame_rate)
 
 def parse_akul_json(frames):
     with open(json_to_analyze, "r") as file:
@@ -282,6 +354,6 @@ if __name__ == '__main__':
     if (USE_LIVE_CAMERA == "true"):
         main(USE_LIVE_CAMERA)
     elif (USE_LIVE_CAMERA == "false"):
-        main(USE_LIVE_CAMERA, sys.argv[2])  # sys.argv[2] is path to .mp4
+        main(USE_LIVE_CAMERA, sys.argv[2], sys.argv[3])  # sys.argv[2] is path to .mp4, sys.argv[3] is send_preformed_json
     else:
-        print("ERRROR, USAGE: python pose_sender.py [USE_LIVE_CAMERA bool] (PATH_TO_MP4_IF_NOT_LIVE)")
+        print("ERRROR, USAGE: python pose_sender.py [USE_LIVE_CAMERA bool] (PATH_TO_MP4_IF_NOT_LIVE) (SEND_PREFORMED_JSON_IF_NOT_LIVE)")
