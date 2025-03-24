@@ -185,9 +185,79 @@ public class PoseReceiverRightLive : MonoBehaviour
     // LateUpdate
     void LateUpdate()
     {
+        // // === 1. Move Hips Target ===
+        // Vector3 leftHipPos = ConvertMediaPipeToUnity(receivedPose.LEFT_HIP);
+        // Vector3 rightHipPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_HIP);
+        // Vector3 midHip = (leftHipPos + rightHipPos) * 0.5f;
+
+        // hipsTarget.position = Vector3.Lerp(hipsTarget.position, midHip, Time.deltaTime * 5);
+        // avatarHips.position = Vector3.Lerp(avatarHips.position, hipsTarget.position, Time.deltaTime * 5);
+
+        // // Compute stable hip rotation
+        // Vector3 hipDirection = (rightHipPos - leftHipPos).normalized; // Sideways direction, i.e. XZ axis vector
+        // Vector3 forwardDirection = -Vector3.Cross(Vector3.up, hipDirection).normalized; // Compute correct forward direction! (i.e. face pos Z axis)
+        // Quaternion hipRotation = Quaternion.identity; // Default rotation to prevent error
+        // if (forwardDirection != Vector3.zero)
+        // {
+        //     hipRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
+        // }
+
+        // // avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, Time.deltaTime * 5);
+        // // Blend hips rotation more aggressively
+        // float hipBlendFactor = 0.9f; // Increase influence of manual rotation
+        // avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, hipBlendFactor);
+
+
+        // // === 2. Compute torso rotation **relative** to the hip's rotation ===
+        // Vector3 leftShoulderPos = ConvertMediaPipeToUnity(receivedPose.LEFT_SHOULDER);
+        // Vector3 rightShoulderPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_SHOULDER);
+        // Vector3 torsoDirection = (rightShoulderPos - leftShoulderPos).normalized;
+        // // Quaternion torsoRotation = Quaternion.LookRotation(torsoDirection, Vector3.up);
+        // Quaternion torsoRotation = Quaternion.identity; // Default rotation to prevent error
+        // if (forwardDirection != Vector3.zero)
+        // {
+        //     torsoRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
+        // }
+
+        // // Blend between IK-controlled rotation and computed torso rotation
+        // float torsoBlendFactor = 0.9f; // Adjust between 0 (IK dominant) and 1 (fully manual rotation)
+
+        // avatarSpine.rotation = Quaternion.Slerp(avatarSpine.rotation, torsoRotation, torsoBlendFactor);
+        // avatarSpine1.rotation = Quaternion.Slerp(avatarSpine1.rotation, torsoRotation, torsoBlendFactor);
+        // avatarSpine2.rotation = Quaternion.Slerp(avatarSpine2.rotation, torsoRotation, torsoBlendFactor);
+
+        // // === 3. Move IK Targets ===
+        // leftHandTarget.position = Vector3.MoveTowards(leftHandTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST), Time.deltaTime * 5);
+        // rightHandTarget.position = Vector3.MoveTowards(rightHandTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST), Time.deltaTime * 5);
+        // leftFootTarget.position = Vector3.MoveTowards(leftFootTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_ANKLE, isFoot: true), Time.deltaTime * 5);
+        // rightFootTarget.position = Vector3.MoveTowards(rightFootTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_ANKLE, isFoot: true), Time.deltaTime * 5);
+        // headTarget.position = Vector3.MoveTowards(headTarget.position, ConvertMediaPipeToUnity(receivedPose.NOSE), Time.deltaTime * 5);
+
+        // // === 4. Set Hand & Foot Rotation (Important for IK) ===
+        // Vector3 leftElbowPos = ConvertMediaPipeToUnity(receivedPose.LEFT_ELBOW);
+        // Vector3 leftWristPos = ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST);
+        // Vector3 leftForearmDir = (leftWristPos - leftElbowPos).normalized;
+        // leftHandTarget.rotation = Quaternion.identity; // Default rotation to prevent error
+        // if (leftForearmDir != Vector3.zero)
+        // {
+        //     leftHandTarget.rotation = Quaternion.LookRotation(leftForearmDir, Vector3.up);
+        // }
+
+        // Vector3 rightElbowPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_ELBOW);
+        // Vector3 rightWristPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST);
+        // Vector3 rightForearmDir = (rightWristPos - rightElbowPos).normalized;
+        // rightHandTarget.rotation = Quaternion.identity; // Default rotation to prevent error
+        // if (rightForearmDir != Vector3.zero)
+        // {
+        //     rightHandTarget.rotation = Quaternion.LookRotation(rightForearmDir, Vector3.up);
+        // }
+
+        // Define the direct offset for the live webcam avatar
+        Vector3 offset = new Vector3(-1.5f, 0, 0);
+
         // === 1. Move Hips Target ===
-        Vector3 leftHipPos = ConvertMediaPipeToUnity(receivedPose.LEFT_HIP);
-        Vector3 rightHipPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_HIP);
+        Vector3 leftHipPos = ConvertMediaPipeToUnity(receivedPose.LEFT_HIP) + offset;
+        Vector3 rightHipPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_HIP) + offset;
         Vector3 midHip = (leftHipPos + rightHipPos) * 0.5f;
 
         hipsTarget.position = Vector3.Lerp(hipsTarget.position, midHip, Time.deltaTime * 5);
@@ -195,24 +265,21 @@ public class PoseReceiverRightLive : MonoBehaviour
 
         // Compute stable hip rotation
         Vector3 hipDirection = (rightHipPos - leftHipPos).normalized; // Sideways direction, i.e. XZ axis vector
-        Vector3 forwardDirection = -Vector3.Cross(Vector3.up, hipDirection).normalized; // Compute correct forward direction! (i.e. face pos Z axis)
+        Vector3 forwardDirection = -Vector3.Cross(Vector3.up, hipDirection).normalized; // Compute correct forward direction (face positive Z axis)
         Quaternion hipRotation = Quaternion.identity; // Default rotation to prevent error
         if (forwardDirection != Vector3.zero)
         {
             hipRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
         }
 
-        // avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, Time.deltaTime * 5);
         // Blend hips rotation more aggressively
         float hipBlendFactor = 0.9f; // Increase influence of manual rotation
         avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, hipBlendFactor);
 
-
         // === 2. Compute torso rotation **relative** to the hip's rotation ===
-        Vector3 leftShoulderPos = ConvertMediaPipeToUnity(receivedPose.LEFT_SHOULDER);
-        Vector3 rightShoulderPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_SHOULDER);
+        Vector3 leftShoulderPos = ConvertMediaPipeToUnity(receivedPose.LEFT_SHOULDER) + offset;
+        Vector3 rightShoulderPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_SHOULDER) + offset;
         Vector3 torsoDirection = (rightShoulderPos - leftShoulderPos).normalized;
-        // Quaternion torsoRotation = Quaternion.LookRotation(torsoDirection, Vector3.up);
         Quaternion torsoRotation = Quaternion.identity; // Default rotation to prevent error
         if (forwardDirection != Vector3.zero)
         {
@@ -221,21 +288,20 @@ public class PoseReceiverRightLive : MonoBehaviour
 
         // Blend between IK-controlled rotation and computed torso rotation
         float torsoBlendFactor = 0.9f; // Adjust between 0 (IK dominant) and 1 (fully manual rotation)
-
         avatarSpine.rotation = Quaternion.Slerp(avatarSpine.rotation, torsoRotation, torsoBlendFactor);
         avatarSpine1.rotation = Quaternion.Slerp(avatarSpine1.rotation, torsoRotation, torsoBlendFactor);
         avatarSpine2.rotation = Quaternion.Slerp(avatarSpine2.rotation, torsoRotation, torsoBlendFactor);
 
         // === 3. Move IK Targets ===
-        leftHandTarget.position = Vector3.MoveTowards(leftHandTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST), Time.deltaTime * 5);
-        rightHandTarget.position = Vector3.MoveTowards(rightHandTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST), Time.deltaTime * 5);
-        leftFootTarget.position = Vector3.MoveTowards(leftFootTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_ANKLE, isFoot: true), Time.deltaTime * 5);
-        rightFootTarget.position = Vector3.MoveTowards(rightFootTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_ANKLE, isFoot: true), Time.deltaTime * 5);
-        headTarget.position = Vector3.MoveTowards(headTarget.position, ConvertMediaPipeToUnity(receivedPose.NOSE), Time.deltaTime * 5);
+        leftHandTarget.position = Vector3.MoveTowards(leftHandTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST) + offset, Time.deltaTime * 5);
+        rightHandTarget.position = Vector3.MoveTowards(rightHandTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST) + offset, Time.deltaTime * 5);
+        leftFootTarget.position = Vector3.MoveTowards(leftFootTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_ANKLE, isFoot: true) + offset, Time.deltaTime * 5);
+        rightFootTarget.position = Vector3.MoveTowards(rightFootTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_ANKLE, isFoot: true) + offset, Time.deltaTime * 5);
+        headTarget.position = Vector3.MoveTowards(headTarget.position, ConvertMediaPipeToUnity(receivedPose.NOSE) + offset, Time.deltaTime * 5);
 
         // === 4. Set Hand & Foot Rotation (Important for IK) ===
-        Vector3 leftElbowPos = ConvertMediaPipeToUnity(receivedPose.LEFT_ELBOW);
-        Vector3 leftWristPos = ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST);
+        Vector3 leftElbowPos = ConvertMediaPipeToUnity(receivedPose.LEFT_ELBOW) + offset;
+        Vector3 leftWristPos = ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST) + offset;
         Vector3 leftForearmDir = (leftWristPos - leftElbowPos).normalized;
         leftHandTarget.rotation = Quaternion.identity; // Default rotation to prevent error
         if (leftForearmDir != Vector3.zero)
@@ -243,8 +309,8 @@ public class PoseReceiverRightLive : MonoBehaviour
             leftHandTarget.rotation = Quaternion.LookRotation(leftForearmDir, Vector3.up);
         }
 
-        Vector3 rightElbowPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_ELBOW);
-        Vector3 rightWristPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST);
+        Vector3 rightElbowPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_ELBOW) + offset;
+        Vector3 rightWristPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST) + offset;
         Vector3 rightForearmDir = (rightWristPos - rightElbowPos).normalized;
         rightHandTarget.rotation = Quaternion.identity; // Default rotation to prevent error
         if (rightForearmDir != Vector3.zero)

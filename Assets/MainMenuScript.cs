@@ -9,12 +9,6 @@ using TMPro; // because Unity now uses TextMeshPro
 
 public class MainMenuScript : MonoBehaviour
 {
-    // function for once video uploaded+processing completed,
-    public void PlayGame()
-    {
-        SceneManager.LoadSceneAsync("Dance Avatar Scene");
-    }
-
     public TMP_Text statusText;  // Assign a UI Text-TextMeshPro element in Unity
 
     void Start()
@@ -34,15 +28,16 @@ public class MainMenuScript : MonoBehaviour
             UnityEngine.Debug.Log("Processing .mp4 video: " + Path.GetFileName(videoPath));
             UnityEngine.Debug.Log("Application.dataPath (game path) is detected as: " + Application.dataPath);
 
-            SceneManager.LoadSceneAsync("Dance Avatar Scene");
+            // SceneManager.LoadSceneAsync("Dance Avatar Scene"); // Dance Avatar has one avatar, the scene with 2 avatars is Compare Dance Avatar
 
-            RunPythonProcessVideo(videoPath);
+            // start coroutine that processes ref .mp4 and waits for complete
+            StartCoroutine(RunPythonProcessVideo(videoPath));
         }
     }
 
     // RunPythonProcessVideo used for if specified videoPath .mp4 reference video
     // ensure non-blocking (unity keeps running to receive .mp4 reference video .json coords)
-    void RunPythonProcessVideo(string videoPath)
+    IEnumerator RunPythonProcessVideo(string videoPath)
     {
         string pythonPath = "python"; // Ensure Python is installed on the device first!
         string scriptPath = Application.dataPath + "/Pose Receiver Scripts/pose_sender.py"; // pose_sender.py script in game folder
@@ -59,7 +54,7 @@ public class MainMenuScript : MonoBehaviour
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
-            CreateNoWindow = false
+            CreateNoWindow = true
         };
 
         Process process = new Process { StartInfo = processInfo };
@@ -83,10 +78,30 @@ public class MainMenuScript : MonoBehaviour
         process.BeginErrorReadLine();  // Asynchronously read error
         UnityEngine.Debug.Log("Python process started asynchronously! Unity will keep running.");
 
-        // string jsonPath = videoPath.Replace(".mp4", "_pose.json");
-        // StartCoroutine(ReadJsonAfterProcessing(jsonPath));
+        float timer = 0f;
+        // float targetTime = 20f; // Set a target time (in seconds) for simulated progress
+        // progressBar.value = 0f;
 
-        ////////////////// ADDDDDDDDDDDD CODE FOR OTHER PROCESSING PYTHON pose_sender.py CALLS for 2 avatars!! (2 pose_sender.py instances, 1for ref .mp4, 1 for live cap)
+        // Update the status text and progress bar until the process completes
+        while (!process.HasExited)
+        {
+            timer += Time.deltaTime;
+            statusText.text = $"Processing: {Path.GetFileName(videoPath)}\nElapsed time: {timer:F1} sec.\nPlease verify the .mp4 dance video is being analyzed";
+            // Simulate progress bar value: progress goes from 0 to 1 over targetTime seconds
+            // progressBar.value = Mathf.Clamp01(timer / targetTime);
+            yield return null;
+        }
+
+        // Ensure progress bar shows full progress when complete.
+        // progressBar.value = 1f;
+        statusText.text = "Processing complete! Preparing comparison scene...";
+        yield return new WaitForSeconds(0.8f);
+
+        // Load the next scene (ensure the scene name is correctly set and added to Build Settings)
+        SceneManager.LoadScene("Compare Dance Avatar");
+
+
+        ////////////////// add CODE FOR OTHER PROCESSING PYTHON pose_sender.py CALLS for 2 avatars!! (2 pose_sender.py instances, 1for ref .mp4, 1 for live cap)
     }
 
     // IEnumerator ReadJsonAfterProcessing(string jsonPath)
