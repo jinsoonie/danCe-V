@@ -60,6 +60,8 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
         # Open videoPath .mp4
         cap = cv2.VideoCapture(videoPath)
 
+    # make window resizable
+    cv2.namedWindow("Live/Video Pose Tracking", cv2.WINDOW_NORMAL)
 
     print(f"Opening cap with UDP_PORT: {UDP_PORT}...")
     # based on USE_LIVE_CAMERA, run CV on live feed or videoPath .mp4
@@ -107,7 +109,7 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
             sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
 
         # Show video output (optional)
-        cv2.imshow("Live Pose Tracking", frame)
+        cv2.imshow("Live/Video Pose Tracking", frame)
 
         # Capture at ~30 fps, Reduce CPU usage
         time.sleep(1/30)  # ~30 FPS
