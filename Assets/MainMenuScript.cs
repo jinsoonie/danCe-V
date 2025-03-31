@@ -103,16 +103,4 @@ public class MainMenuScript : MonoBehaviour
 
         ////////////////// add CODE FOR OTHER PROCESSING PYTHON pose_sender.py CALLS for 2 avatars!! (2 pose_sender.py instances, 1for ref .mp4, 1 for live cap)
     }
-
-    // IEnumerator ReadJsonAfterProcessing(string jsonPath)
-    // {
-    //     while (!File.Exists(jsonPath))  // Wait for Python to generate the file
-    //     {
-    //         yield return new WaitForSeconds(1);
-    //     }
-
-    //     string jsonContent = File.ReadAllText(jsonPath);
-    //     statusText.text = "Analysis complete! reference .mp4 dance JSON received.";
-    //     UnityEngine.Debug.Log("Pose Data: " + jsonContent);
-    // }
 }

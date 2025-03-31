@@ -30,6 +30,8 @@ public class PoseReceiverLeftRef : MonoBehaviour
     private UdpClient udpClient; // UDP socket to receive data
     private Thread udpReceiveThread; // Background thread for listening to UDP messages
     private PoseData receivedPose = new PoseData();
+    private volatile bool _shouldExit = false; // Flag to signal the thread to exit (needed in case ReceiveData() is blocking)
+
 
     /// Unity Start() method runs once when the scene starts.
     /// init UDP connection.
@@ -37,11 +39,34 @@ public class PoseReceiverLeftRef : MonoBehaviour
     {
         // Initialize UDP socket on port 5006 (LEFT REF is 5006)
         udpClient = new UdpClient(5006);
+        _shouldExit = false;
 
         // Start a background thread for receiving UDP data
         udpReceiveThread = new Thread(new ThreadStart(ReceiveData));
         udpReceiveThread.IsBackground = true;
         udpReceiveThread.Start();
+    }
+
+    void OnDestroy()
+    {
+        Debug.Log("Destroyed LEFT REF!!! Cleaning up UDP resources.");
+        // Signal the thread to exit
+        _shouldExit = true;
+
+        // Close the UDP client. This will cause the blocking Receive() to throw a SocketException.
+        if (udpClient != null)
+        {
+            udpClient.Close();
+            udpClient = null;
+        }
+
+        // Wait for the receiving thread to finish
+        if (udpReceiveThread != null)
+        {
+            // Wait up to 1 second for the thread to exit gracefully
+            udpReceiveThread.Join(1000);
+            udpReceiveThread = null;
+        }
     }
 
     // convert mediapipe xyz to unity world coords
@@ -83,9 +108,9 @@ public class PoseReceiverLeftRef : MonoBehaviour
     /// Runs on a separate thread.
     void ReceiveData()
     {
-        IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 5005);
+        IPEndPoint remoteEP = new IPEndPoint(IPAddress.Any, 5006);
 
-        while (true)
+        while (!_shouldExit)
         {
             try
             {

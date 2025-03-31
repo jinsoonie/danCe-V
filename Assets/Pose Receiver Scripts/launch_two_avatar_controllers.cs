@@ -2,20 +2,80 @@ using UnityEngine;
 using System.Diagnostics;
 using System.IO;
 using System.Collections;
+using UnityEngine.SceneManagement;
+
 
 public class DanceAvatarController : MonoBehaviour
 {
+    // public pauseMenu UI
+    public GameObject pauseMenu;  // assigned pause menu UI in the Inspector
+    // private keep track of isPaused state
+    private bool isPaused = false;
+
     void Start()
     {
         UnityEngine.Debug.Log("Unity called Python with Type 1 (Live Cam Feed).");
         // Start the live webcam feed process (Type 1)
         StartCoroutine(RunPythonProcess(true, "", false));
 
-        // Start the reference JSON process (Type 3)
-        // Update the path if your JSON file is stored elsewhere.
-        string referenceJsonPath = Application.dataPath + "/Pose Receiver Scripts/reference_output.json";
-        UnityEngine.Debug.Log("Unity called Python with Type 3 (Ref json sent).");
-        StartCoroutine(RunPythonProcess(false, referenceJsonPath, true));
+        // // Start the reference JSON process (Type 3)
+        // // Update the path if JSON file is stored elsewhere.
+        // string referenceJsonPath = Application.dataPath + "/Pose Receiver Scripts/reference_output.json";
+        // UnityEngine.Debug.Log("Unity called Python with Type 3 (Ref json sent).");
+        // StartCoroutine(RunPythonProcess(false, referenceJsonPath, true));
+    }
+
+    void Update()
+    {
+        // Start the reference JSON process (Type 3) when space is pressed
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            // Update the path if JSON file is stored elsewhere.
+            string referenceJsonPath = Application.dataPath + "/Pose Receiver Scripts/reference_output.json";
+            UnityEngine.Debug.Log("Unity called Python with Type 3 (Ref json sent).");
+            StartCoroutine(RunPythonProcess(false, referenceJsonPath, true));
+        }
+
+        // Toggle pause state with the escape key
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (isPaused)
+                ResumeGame();
+            else
+                PauseGame();
+        }
+    }
+
+    void PauseGame()
+    {
+        isPaused = true;
+        Time.timeScale = 0f;  // Freeze game time
+        pauseMenu.SetActive(true);  // Display the pause menu
+    }
+
+    void ResumeGame()
+    {
+        isPaused = false;
+        Time.timeScale = 1f;  // Resume game time
+        pauseMenu.SetActive(false);  // Hide the pause menu
+    }
+
+    // Called when the Restart button is clicked
+    public void RestartLevel()
+    {
+        // Resume time in case the game is paused.
+        Time.timeScale = 1f;
+        // Reload the current scene.
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+    // Called when the Main Menu button is clicked
+    public void LoadMainMenu()
+    {
+        // Resume time before loading the main menu.
+        Time.timeScale = 1f;
+        // Load the MainMenu scene (ensure that your scene name matches exactly).
+        SceneManager.LoadScene("Main Menu");
     }
 
     IEnumerator RunPythonProcess(bool useLiveCamera, string filePath, bool sendPreformedJson)
