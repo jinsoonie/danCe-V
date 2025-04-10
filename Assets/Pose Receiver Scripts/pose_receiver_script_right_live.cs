@@ -117,11 +117,20 @@ public class PoseReceiverRightLive : MonoBehaviour
                 byte[] data = udpClient.Receive(ref remoteEP);
                 string json = Encoding.UTF8.GetString(data);
 
-                // inserted for testing/printing json message (contains testmsg + 3 floats?)
-                // Debug.Log("Received JSON: " + json);
+                // // inserted for testing/printing json message (contains testmsg + 3 floats?)
+                // Debug.Log("Right_Live Received JSON: " + json);
 
-                // Convert JSON string to PoseData object (parse)
-                PoseData tempPose = JsonUtility.FromJson<PoseData>(json);
+                // // Convert JSON string to PoseData object (parse)
+                // PoseData tempPose = JsonUtility.FromJson<PoseData>(json);
+
+                // NEW WAY OF RECEIVING (based on danny pose_sender)
+                Debug.Log("Received Combined JSON: " + json);
+
+                // Deserialize into CombinedData
+                CombinedData combined = JsonUtility.FromJson<CombinedData>(json);
+
+                // Extract pose
+                PoseData tempPose = combined.pose;
 
                 receivedPose.LEFT_WRIST = tempPose.LEFT_WRIST;
                 receivedPose.RIGHT_WRIST = tempPose.RIGHT_WRIST;
@@ -364,5 +373,26 @@ public class PoseReceiverRightLive : MonoBehaviour
 
         // left_elbow, right_elbow for direction in lateUpdate
         public Vector3 LEFT_ELBOW, RIGHT_ELBOW;
+    }
+
+    // added for danny's updated pose_sender json
+    [System.Serializable]
+    public class CombinedData
+    {
+        public PoseData pose;
+        public ComparisonData comparison; // the actual feedback to be shown on Unity UI
+    }
+
+    [System.Serializable]
+    public class ComparisonData
+    {
+        public float overall_similarity;
+        public float reference_position;
+        public float timing_difference;
+        public string dtw_distance; // "Infinity" is not a valid float in Unity JSON, so use string
+
+        // public JointScores joint_scores;
+        public string[] problem_areas;
+        // public ImprovementSuggestions improvement_suggestions;
     }
 }

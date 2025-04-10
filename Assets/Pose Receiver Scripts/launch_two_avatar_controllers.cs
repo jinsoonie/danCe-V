@@ -87,7 +87,7 @@ public class DanceAvatarController : MonoBehaviour
         // Configure the arguments based on the process type.
         if (useLiveCamera)
         {
-            // Type 1: live webcam feed (useLiveCamera = true, no file path, sendPreformedJson = false)
+            // Type 1: live webcam feed (useLiveCamera = true, (potentially) file path to ref, sendPreformedJson = false)
             arguments = $"\"{scriptPath}\" True \"\" False";
         }
         else if (sendPreformedJson)

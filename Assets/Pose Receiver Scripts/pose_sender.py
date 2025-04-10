@@ -5,8 +5,48 @@ import time
 import os
 import sys
 import string
-from simple_landmark_reader import SimplePoseLandmarkReader
+# from simple_landmark_reader import SimplePoseLandmarkReader
 import cv2
+import numpy as np
+from scipy.spatial.distance import euclidean
+from fastdtw import fastdtw
+import collections
+import threading
+import pygame
+
+# Create a global flag to signal when video is done
+reference_video_finished = False
+
+# Create a function to handle only the reference video playback
+def play_reference_video(video_path):
+    global reference_video_finished
+    video_cap = cv2.VideoCapture(video_path)
+    if not video_cap.isOpened():
+        print(f"Error: Could not open reference video at {video_path}")
+        return
+    
+    fps = video_cap.get(cv2.CAP_PROP_FPS)
+    frame_delay = int(1000 / fps)  # milliseconds
+    print(f"Reference video FPS: {fps}, frame delay: {frame_delay}ms")
+    
+    cv2.namedWindow("Reference Video", cv2.WINDOW_NORMAL)
+    
+    while True:
+        ret, frame = video_cap.read()
+        if not ret:
+            reference_video_finished = True
+            break
+            
+        cv2.imshow("Reference Video", frame)
+        
+        # This is critical - this waitKey controls the playback speed
+        # and also handles the window refresh
+        key = cv2.waitKey(frame_delay) & 0xFF
+        if key == ord('q'):
+            break
+
+    reference_video_finished = True
+    video_cap.release()
 
 # initialize MediaPipe Pose model
 mp_pose = mp.solutions.pose
@@ -23,6 +63,430 @@ pose_filename = os.path.join(script_dir, "ref_mp4_pose_data.json")  # Save JSON 
 # when this script invoked, USE_LIVE_CAMERA is arg1, videoPath is arg2 (only used when arg1 = True), send_preformed_json is arg3 (for only sending .json to unity)
 # SELECT WHICH MODE TO USE, USE_LIVE_CAMERA True is for live capture of user CV, False is for reference mp4 .json
 ref_mp4_pose_data_list = []     # list to store ref_mp4_pose data (py list of jsons)
+
+# Global variables for state management
+live_buffer = collections.deque(maxlen=30)  # 30 frames = ~1 second at 30fps
+last_analysis_time = 0
+current_ref_position = 0
+last_dtw_distance = float('inf')
+last_matched_segment = 0
+joint_similarity_scores = {}  # Store per-joint similarity scores
+
+def normalize_pose(landmarks):
+    """
+    Normalize pose data to be invariant to position and scale, ignoring z-axis
+    
+    Args:
+        landmarks: Dictionary of joint coordinates
+        
+    Returns:
+        Dictionary of normalized joint coordinates
+    """
+    # Find the center point (midpoint between hips)
+    if "LEFT_HIP" in landmarks and "RIGHT_HIP" in landmarks:
+        center_x = (landmarks["LEFT_HIP"]["x"] + landmarks["RIGHT_HIP"]["x"]) / 2
+        center_y = (landmarks["LEFT_HIP"]["y"] + landmarks["RIGHT_HIP"]["y"]) / 2
+        
+        # Calculate scale using torso height
+        if "LEFT_SHOULDER" in landmarks and "RIGHT_SHOULDER" in landmarks:
+            shoulder_y = (landmarks["LEFT_SHOULDER"]["y"] + landmarks["RIGHT_SHOULDER"]["y"]) / 2
+            scale = abs(shoulder_y - center_y) * 2  # Torso height as scale
+            if scale < 0.01:  # Avoid division by zero
+                scale = 0.01
+        else:
+            scale = 0.2  # Default scale if shoulders not detected
+            
+        # Normalize all landmarks, ignoring z coordinate
+        normalized = {}
+        for joint, coords in landmarks.items():
+            normalized[joint] = {
+                "x": (coords["x"] - center_x) / scale,
+                "y": (coords["y"] - center_y) / scale,
+                "z": coords["z"]  # Keep z as is, it will be ignored in feature extraction
+            }
+        return normalized
+    return landmarks  # Return original if normalization not possible
+
+def load_reference_data(reference_json_path):
+    """Load reference pose data from JSON file"""
+    with open(reference_json_path, 'r') as f:
+        return json.load(f)
+
+def get_joint_groups():
+    """
+    Return a dictionary of joint groups for more meaningful feedback
+    Each group contains related joints that work together
+    """
+    return {
+        "arms": {
+            "left": ["LEFT_SHOULDER", "LEFT_ELBOW", "LEFT_WRIST"],
+            "right": ["RIGHT_SHOULDER", "RIGHT_ELBOW", "RIGHT_WRIST"]
+        },
+        "legs": {
+            "left": ["LEFT_HIP", "LEFT_KNEE", "LEFT_ANKLE"],
+            "right": ["RIGHT_HIP", "RIGHT_KNEE", "RIGHT_ANKLE"]
+        },
+        "torso": ["LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_HIP", "RIGHT_HIP"],
+        "head": ["NOSE", "LEFT_EYE", "RIGHT_EYE", "LEFT_EAR", "RIGHT_EAR"]
+    }
+
+def get_all_landmarks():
+    """Return a list of all landmarks to consider for comparison"""
+    return [
+        "NOSE", "LEFT_EYE", "RIGHT_EYE", "LEFT_EAR", "RIGHT_EAR",
+        "LEFT_SHOULDER", "RIGHT_SHOULDER", 
+        "LEFT_ELBOW", "RIGHT_ELBOW",
+        "LEFT_WRIST", "RIGHT_WRIST",
+        "LEFT_HIP", "RIGHT_HIP",
+        "LEFT_KNEE", "RIGHT_KNEE",
+        "LEFT_ANKLE", "RIGHT_ANKLE"
+    ]
+
+def extract_joint_features(pose_data, joint_name):
+    """Extract features for a specific joint, ignoring z-axis"""
+    # First normalize the pose data
+    normalized_pose = normalize_pose(pose_data)
+    
+    if joint_name in normalized_pose:
+        landmark = normalized_pose[joint_name] 
+        # Only use x and y coordinates
+        return np.array([landmark["x"], landmark["y"]])  
+    return np.zeros(2)  # Return 2D zero vector since we're ignoring z
+
+def extract_features(pose_data, landmark_list=None):
+    """Extract relevant features from pose data for comparison, ignoring z-axis"""
+    if landmark_list is None:
+        landmark_list = get_all_landmarks()
+    
+    # First normalize the pose data
+    normalized_pose = normalize_pose(pose_data)
+    
+    features = []
+    for landmark_name in landmark_list:
+        if landmark_name in normalized_pose:
+            landmark = normalized_pose[landmark_name]
+            # Only use x and y coordinates, ignore z
+            features.extend([landmark["x"], landmark["y"]])
+    
+    return np.array(features)
+
+def compute_joint_dtw(live_sequence, ref_sequence, joint_names):
+    """
+    Compute DTW distance for a specific joint or group of joints, ignoring z-axis
+    
+    Args:
+        live_sequence: List of live frame data
+        ref_sequence: List of reference frame data
+        joint_names: List of joint names to compare
+        
+    Returns:
+        Normalized DTW distance
+    """
+    # Extract features for specified joints only
+    live_joint_seq = []
+    ref_joint_seq = []
+    
+    for live_frame in live_sequence:
+        live_features = extract_features(live_frame, joint_names)
+        live_joint_seq.append(live_features)
+    
+    for ref_frame in ref_sequence:
+        ref_features = extract_features(ref_frame, joint_names)
+        ref_joint_seq.append(ref_features)
+    
+    # Compute DTW
+    distance, path = fastdtw(np.array(live_joint_seq), np.array(ref_joint_seq), dist=euclidean)
+    
+    # Normalize by path length and number of features (2 per joint since we're ignoring z)
+    normalized_distance = distance / (len(path) * len(joint_names) * 2)
+    
+    return normalized_distance
+
+def analyze_window(live_buffer, reference_data, window_size=30, stride=1):
+    """
+    Analyze the current window against reference sequence with per-joint analysis
+    
+    Args:
+        live_buffer: List of recent live frames (full pose data)
+        reference_data: List of reference pose data frames
+        window_size: Size of the comparison window
+        stride: Number of frames to advance window for each analysis
+        
+    Returns:
+        Dictionary with analysis results including per-joint scores
+    """
+    global current_ref_position, last_dtw_distance, last_matched_segment, joint_similarity_scores
+    
+    # First find the best matching segment based on overall pose
+    best_distance = float('inf')
+    best_position = 0
+    
+    # Use the expected position based on time elapsed
+    # This assumes constant playback speed of the reference
+    expected_position = current_ref_position
+    
+    # Search window in reference sequence
+    search_start = max(0, expected_position - window_size)
+    search_end = min(len(reference_data) - window_size, 
+                     expected_position + window_size)
+    
+    # Extract live sequence from buffer (we need the full pose data)
+    live_sequence = list(live_buffer)
+    
+    for i in range(search_start, search_end, stride):
+        # Extract window from reference
+        ref_window = reference_data[i:i+window_size]
+        if len(ref_window) < window_size:
+            continue
+            
+        # Get overall DTW distance first
+        all_landmarks = get_all_landmarks()
+        
+        # Extract features for full comparison (all joints)
+        live_features = [extract_features(frame, all_landmarks) for frame in live_sequence]
+        ref_features = [extract_features(frame, all_landmarks) for frame in ref_window]
+        
+        # Compute overall DTW
+        distance, path = fastdtw(np.array(live_features), np.array(ref_features), dist=euclidean)
+        normalized_distance = distance / len(path)
+        
+        # Update best match
+        if normalized_distance < best_distance:
+            best_distance = normalized_distance
+            best_position = i
+    
+    # Now that we found the best matching segment, analyze individual joints
+    if best_position != 0:  # Make sure we found a match
+        ref_best_window = reference_data[best_position:best_position+window_size]
+        
+        # Get joint groups
+        joint_groups = get_joint_groups()
+        
+        # Analyze each joint group
+        group_scores = {}
+        
+        # Analyze individual joints first
+        individual_joints = []
+        for group in joint_groups.values():
+            if isinstance(group, dict):
+                for subgroup in group.values():
+                    individual_joints.extend(subgroup)
+            else:
+                individual_joints.extend(group)
+        
+        # De-duplicate joints
+        individual_joints = list(set(individual_joints))
+        
+        # Calculate per-joint scores
+        joint_scores = {}
+        for joint in individual_joints:
+            joint_dtw = compute_joint_dtw(live_sequence, ref_best_window, [joint])
+            similarity = max(0, 100 - (joint_dtw * (100/0.3)))
+            similarity = min(100, similarity)  # Cap at 100
+            joint_scores[joint] = similarity
+        
+        # Calculate group scores based on individual joints
+        for group_name, group_data in joint_groups.items():
+            if isinstance(group_data, dict):
+                # This is a group with subgroups
+                group_scores[group_name] = {}
+                for subgroup_name, joints in group_data.items():
+                    subgroup_score = sum(joint_scores[j] for j in joints) / len(joints)
+                    group_scores[group_name][subgroup_name] = subgroup_score
+            else:
+                # This is a simple group
+                group_score = sum(joint_scores[j] for j in group_data) / len(group_data)
+                group_scores[group_name] = group_score
+        
+        # Store for later use
+        joint_similarity_scores = {
+            "individual": joint_scores,
+            "groups": group_scores
+        }
+    
+    # Update current position and score
+    current_ref_position = current_ref_position + stride
+    last_dtw_distance = best_distance
+    last_matched_segment = best_position
+    
+    # Return analysis results
+    return get_current_analysis()
+
+def get_current_analysis():
+    """Get the latest analysis results including per-joint feedback"""
+    global last_dtw_distance, last_matched_segment, current_ref_position, joint_similarity_scores
+    
+    # Calculate overall similarity score (0-100 scale)
+    threshold = 1.5
+    overall_similarity = max(0, 100 - (last_dtw_distance * (100/threshold)))
+    overall_similarity = min(100, overall_similarity)  # Cap at 100
+    
+    # Check if dancer is ahead or behind
+    timing_diff = current_ref_position - last_matched_segment
+    
+    # Find problem areas (joints with low scores)
+    problem_areas = []
+    improvement_suggestions = {}
+    
+    if joint_similarity_scores:
+        # Find joints with similarity below threshold
+        individual_scores = joint_similarity_scores.get("individual", {})
+        
+        # Get the worst performing joints
+        worst_joints = sorted(individual_scores.items(), key=lambda x: x[1])[:3]
+        for joint, score in worst_joints:
+            if score < 70:  # Only include problematic joints
+                problem_areas.append(joint)
+        
+        # Create improvement suggestions based on group scores
+        group_scores = joint_similarity_scores.get("groups", {})
+        
+        # Check arms
+        arms = group_scores.get("arms", {})
+        if isinstance(arms, dict):
+            left_arm = arms.get("left", 100)
+            right_arm = arms.get("right", 100)
+            
+            if left_arm < 60:
+                improvement_suggestions["left_arm"] = "Work on left arm movement and positioning"
+            if right_arm < 60:
+                improvement_suggestions["right_arm"] = "Work on right arm movement and positioning"
+        
+        # Check legs
+        legs = group_scores.get("legs", {})
+        if isinstance(legs, dict):
+            left_leg = legs.get("left", 100)
+            right_leg = legs.get("right", 100)
+            
+            if left_leg < 60:
+                improvement_suggestions["left_leg"] = "Improve left leg movement and positioning"
+            if right_leg < 60:
+                improvement_suggestions["right_leg"] = "Improve right leg movement and positioning"
+        
+        # Check torso
+        torso = group_scores.get("torso", 100)
+        if torso < 60:
+            improvement_suggestions["torso"] = "Focus on core body positioning and stability"
+            
+        # Check head
+        head = group_scores.get("head", 100)
+        if head < 60:
+            improvement_suggestions["head"] = "Pay attention to head positioning"
+    
+    return {
+        "overall_similarity": overall_similarity,
+        "reference_position": last_matched_segment,
+        "timing_difference": timing_diff,
+        "dtw_distance": last_dtw_distance,
+        "joint_scores": joint_similarity_scores,
+        "problem_areas": problem_areas,
+        "improvement_suggestions": improvement_suggestions
+    }
+
+def add_live_frame(pose_data, reference_data, analysis_interval=0.1):
+    """
+    Add a new frame from live video to the buffer and analyze if needed
+    
+    Args:
+        pose_data: Current frame's pose data
+        reference_data: Full reference sequence data
+        analysis_interval: How often to run analysis (in seconds)
+        
+    Returns:
+        Dictionary with analysis results or None if not analyzed
+    """
+    global live_buffer, last_analysis_time
+    
+    # Add frame to buffer
+    live_buffer.append(pose_data)
+    
+    # Perform analysis if enough time has passed
+    current_time = time.time()
+    if current_time - last_analysis_time >= analysis_interval and len(live_buffer) >= live_buffer.maxlen:
+        last_analysis_time = current_time
+        return analyze_window(live_buffer, reference_data)
+        
+    return get_current_analysis()
+
+def get_score_color(score):
+    if score > 80: return (0, 255, 0)
+    elif score > 60: return (0, 255, 255)
+    elif score > 40: return (0, 165, 255)
+    else: return (0, 0, 255)
+
+def visualize_comparison(frame, comparison_data):
+    """Display detailed comparison metrics on the frame"""
+    if not comparison_data:
+        return frame
+        
+    # Overall similarity
+    similarity = comparison_data.get("overall_similarity", 0)
+    color = (0, 255, 0) if similarity > 70 else (0, 165, 255) if similarity > 40 else (0, 0, 255)
+    cv2.putText(frame, f"Overall: {similarity:.1f}%", (10, 30), 
+              cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+    
+    # Timing with more sensitive thresholds
+    timing_diff = comparison_data.get("timing_difference", 0)
+    timing_text = "On time"
+    if timing_diff < -5:  # If negative, you're BEHIND
+        timing_text = "Behind"
+    elif timing_diff > 5:  # If positive, you're AHEAD
+        timing_text = "Ahead"       
+    
+    # Add color coding for timing
+    if timing_text == "On time":
+        timing_color = (0, 255, 0)  # Green
+    elif timing_text == "Behind":
+        timing_color = (0, 0, 255)  # Red
+    else:  # Ahead
+        timing_color = (255, 165, 0)  # Orange
+        
+    cv2.putText(frame, f"Timing: {timing_text} ({timing_diff})", (10, 60),
+              cv2.FONT_HERSHEY_SIMPLEX, 0.8, timing_color, 2)
+              
+    # Display problem areas
+    problem_areas = comparison_data.get("problem_areas", [])
+    if problem_areas:
+        areas_text = "Improve: " + ", ".join([p.split('_')[0] for p in problem_areas[:3]])
+        cv2.putText(frame, areas_text, (10, 90),
+                  cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+    
+    # Display improvement suggestions (only one at a time to avoid cluttering)
+    suggestions = comparison_data.get("improvement_suggestions", {})
+    if suggestions:
+        # Get a random suggestion to display (changes every frame)
+        import random
+        suggestion_key = random.choice(list(suggestions.keys()))
+        suggestion_text = suggestions[suggestion_key]
+        cv2.putText(frame, suggestion_text, (10, 120),
+                  cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+    
+    # Add group scores on the right side of the frame
+    joint_scores = comparison_data.get("joint_scores", {})
+    group_scores = joint_scores.get("groups", {})
+    
+    y_offset = 30
+    for group_name, score in group_scores.items():
+        if isinstance(score, dict):
+            # This is a group with subgroups
+            for subgroup_name, subscore in score.items():
+                display_name = f"{group_name.title()} ({subgroup_name})"
+                color = get_score_color(subscore)
+                cv2.putText(frame, f"{display_name}: {subscore:.1f}%", 
+                          (frame.shape[1] - 250, y_offset),
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                y_offset += 25
+        else:
+            # This is a simple group score
+            color = get_score_color(score)
+            cv2.putText(frame, f"{group_name.title()}: {score:.1f}%", 
+                      (frame.shape[1] - 250, y_offset),
+                      cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+            y_offset += 25
+    
+    return frame
+
+
 def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
     # configure UDP socket
     UDP_IP = "127.0.0.1"    # local host IP as assume running on same device
@@ -35,14 +499,28 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
     sock = socket.socket(socket.AF_INET,    # INTERNET
                         socket.SOCK_DGRAM)  # UDP
     
+    # Load reference data if needed for comparison
+    reference_data = None
+    if USE_LIVE_CAMERA == "true" and os.path.exists(pose_filename):
+        print("Loading reference data for DTW comparison...")
+        reference_data = load_reference_data(pose_filename)
+    
     if USE_LIVE_CAMERA == "true":
-        print("Running in REAL-TIME mode (Live Camera)... Press 'q' to quit.")
+        print(f"Running in REAL-TIME mode (Live Camera)... Press 'q' to quit. Ref video on {videoPath}")
 
         # assign UDP_PORT for pose_receiver_script_right_live
         UDP_PORT = 5005
 
-        # Open webcam for live feed
+        # Open webcam for live feed window
         cap = cv2.VideoCapture(0)  # 0 = Default webcam
+
+
+        # Start reference video in a separate thread
+        video_thread = threading.Thread(target=play_reference_video, args=(videoPath,))
+        video_thread.daemon = True
+        video_thread.start()
+
+
 
     else:
         print("Running in REPLAY mode...")
@@ -59,18 +537,34 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
 
         # Open videoPath .mp4
         cap = cv2.VideoCapture(videoPath)
+        video_cap = None
+
+    print(f"Opening cap with UDP_PORT: {UDP_PORT}...")
 
     # make window resizable
     cv2.namedWindow("Live/Video Pose Tracking", cv2.WINDOW_NORMAL)
 
-    print(f"Opening cap with UDP_PORT: {UDP_PORT}...")
+    # TEMP ADDED FOR FASTER PROCESSING (TEMP)
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    frame_skip = 2  # Process every 2nd frame, for example
+
     # based on USE_LIVE_CAMERA, run CV on live feed or videoPath .mp4
-    while cap.isOpened():
+    while cap.isOpened() or video_cap.isOpened():
+
+        if USE_LIVE_CAMERA == "true" and reference_video_finished:
+            print("Reference video finished, terminating program")
+            break
+
         ret, frame = cap.read()
         # If either reached end of .mp4 OR Live Camera Feed Ended
         if not ret:
             print("End of video or Live Camera feed lost!")
             break
+
+        # TEMP ADDED FOR FASTER PROCESSING (TEMP)
+        frame_id = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        if frame_id % frame_skip != 0:
+            continue
 
         # Convert to RGB (for MediaPipe)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -98,21 +592,35 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
                     "z": round(landmark.z, 4)
                 }
 
-            # before convert to JSON, add xyz frame to ref_mp4_pose_data_list
+            # If in REPLAY mode, add to reference data
+            # if USE_LIVE_CAMERA == "false":
             ref_mp4_pose_data_list.append(landmarks_data)
+            
+            # If in LIVE mode and reference data exists, perform DTW comparison
+            comparison_data = {}
+            if USE_LIVE_CAMERA == "true" and reference_data:
+                comparison_data = add_live_frame(landmarks_data, reference_data)
+                # Visualize comparison on frame with enhanced per-joint feedback
+                frame = visualize_comparison(frame, comparison_data)
+
+            # Combine pose data with comparison results
+            combined_data = {
+                "pose": landmarks_data,
+                "comparison": comparison_data
+            }
 
             # Convert to JSON string
-            pose_json = json.dumps(landmarks_data)
-            # print(pose_json)
+            pose_json = json.dumps(combined_data)
 
-            # Send pose data over UDP directly to Unity, no json made
+            # Send pose data over UDP directly to Unity
             sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
 
-        # Show video output (optional)
+        # Show video output
         cv2.imshow("Live/Video Pose Tracking", frame)
 
+
         # Capture at ~30 fps, Reduce CPU usage
-        time.sleep(1/30)  # ~30 FPS
+        # time.sleep(1/30)  # ~30 FPS
 
         # Quit on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -353,8 +861,8 @@ def send_akul_json_to_unity(frames):
 if __name__ == '__main__':
     USE_LIVE_CAMERA = sys.argv[1].lower()
     print(f"pose_sender CALLED with: {sys.argv}")
-    if (USE_LIVE_CAMERA == "true"):
-        main(USE_LIVE_CAMERA)
+    if (USE_LIVE_CAMERA == "true"): # even if called with USE_LIVE_CAMERA=true, need to include path to ref .mp4 (dannys ver)
+        main(USE_LIVE_CAMERA, sys.argv[2]) #, sys.argv[3])
     elif (USE_LIVE_CAMERA == "false"):
         main(USE_LIVE_CAMERA, sys.argv[2], sys.argv[3])  # sys.argv[2] is path to .mp4, sys.argv[3] is send_preformed_json
     else:
