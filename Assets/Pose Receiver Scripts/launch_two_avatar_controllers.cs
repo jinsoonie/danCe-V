@@ -3,6 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Collections;
 using UnityEngine.SceneManagement;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
+
 
 
 public class DanceAvatarController : MonoBehaviour
@@ -11,6 +15,7 @@ public class DanceAvatarController : MonoBehaviour
     public GameObject pauseMenu;  // assigned pause menu UI in the Inspector
     // private keep track of isPaused state
     private bool isPaused = false;
+    
 
     void Start()
     {
@@ -34,6 +39,9 @@ public class DanceAvatarController : MonoBehaviour
             string referenceJsonPath = Application.dataPath + "/Pose Receiver Scripts/reference_output.json";
             UnityEngine.Debug.Log("Unity called Python with Type 3 (Ref json sent).");
             StartCoroutine(RunPythonProcess(false, referenceJsonPath, true));
+
+            // Send START signal to Python (to begin comparison)
+            SendComparisonStartSignalToPython();
         }
 
         // Toggle pause state with the escape key
@@ -134,4 +142,24 @@ public class DanceAvatarController : MonoBehaviour
         // or just end Unity coroutine for now
         yield break;
     }
+
+    // tell pose_sender to start displaying comparison metrics only when this is sent (ref avatar is triggered as well)
+    void SendComparisonStartSignalToPython()
+    {
+        using (UdpClient udpClient = new UdpClient())
+        {
+            try
+            {
+                string message = "START_COMPARISON";
+                byte[] data = Encoding.ASCII.GetBytes(message);
+                udpClient.Send(data, data.Length, "127.0.0.1", 5010); // 5010 is where pose_sender.py is listening for START_SIGNAL
+                UnityEngine.Debug.Log("Unity Sent START_COMPARISON signal to Python.");
+            }
+            catch (System.Exception ex)
+            {
+                UnityEngine.Debug.LogError($"Unity Error sending START_COMPARISON: {ex.Message}");
+            }
+        }
+    }
+
 }

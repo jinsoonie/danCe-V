@@ -124,7 +124,7 @@ public class PoseReceiverRightLive : MonoBehaviour
                 // PoseData tempPose = JsonUtility.FromJson<PoseData>(json);
 
                 // NEW WAY OF RECEIVING (based on danny pose_sender)
-                Debug.Log("Received Combined JSON: " + json);
+                // Debug.Log("Received Combined JSON: " + json);
 
                 // Deserialize into CombinedData
                 CombinedData combined = JsonUtility.FromJson<CombinedData>(json);

@@ -12,10 +12,22 @@ from scipy.spatial.distance import euclidean
 from fastdtw import fastdtw
 import collections
 import threading
-import pygame
 
 # Create a global flag to signal when video is done
 reference_video_finished = False
+
+# Declare sync flag (for comparison algo only to begin when Ref Avatar also start moving, i.e. spacebar from unity)
+comparison_started = threading.Event()
+def listen_for_start_signal(sock):
+    while True:
+        try:
+            data, _ = sock.recvfrom(1024)
+            if data.decode().strip() == "START_COMPARISON":
+                print("Python Received START signal from Unity! Beginning comparison...")
+                comparison_started.set()
+                break
+        except:
+            continue
 
 # Create a function to handle only the reference video playback
 def play_reference_video(video_path):
@@ -383,20 +395,45 @@ def get_current_analysis():
         "improvement_suggestions": improvement_suggestions
     }
 
-def add_live_frame(pose_data, reference_data, analysis_interval=0.1):
-    """
-    Add a new frame from live video to the buffer and analyze if needed
+# def add_live_frame(pose_data, reference_data, analysis_interval=0.5):
+#     """
+#     Add a new frame from live video to the buffer and analyze if needed
     
-    Args:
-        pose_data: Current frame's pose data
-        reference_data: Full reference sequence data
-        analysis_interval: How often to run analysis (in seconds)
+#     Args:
+#         pose_data: Current frame's pose data
+#         reference_data: Full reference sequence data
+#         analysis_interval: How often to run analysis (in seconds)
         
-    Returns:
-        Dictionary with analysis results or None if not analyzed
-    """
-    global live_buffer, last_analysis_time
+#     Returns:
+#         Dictionary with analysis results or None if not analyzed
+#     """
+#     global live_buffer, last_analysis_time
     
+#     # Add frame to buffer
+#     live_buffer.append(pose_data)
+    
+#     # Perform analysis if enough time has passed
+#     current_time = time.time()
+#     if current_time - last_analysis_time >= analysis_interval and len(live_buffer) >= live_buffer.maxlen:
+#         last_analysis_time = current_time
+#         return analyze_window(live_buffer, reference_data)
+        
+#     return get_current_analysis()
+
+# modified to run analysis in the background, else too slow on live webcam for add_live_frame
+analysis_result = None
+analysis_running = False
+
+def background_analysis(reference_data):
+    global analysis_result, analysis_running
+    print("BACKGROUND ANALYSIS RUNNING")
+    analysis_result = analyze_window(live_buffer, reference_data)
+    analysis_running = False
+
+# add_live_frame's analysis interval increased, 0.1 -> 0.8
+def add_live_frame(pose_data, reference_data, analysis_interval=0.8):
+    global live_buffer, last_analysis_time, analysis_result, analysis_running
+
     # Add frame to buffer
     live_buffer.append(pose_data)
     
@@ -404,9 +441,11 @@ def add_live_frame(pose_data, reference_data, analysis_interval=0.1):
     current_time = time.time()
     if current_time - last_analysis_time >= analysis_interval and len(live_buffer) >= live_buffer.maxlen:
         last_analysis_time = current_time
-        return analyze_window(live_buffer, reference_data)
+        analysis_running = True
+        threading.Thread(target=background_analysis, args=(reference_data,)).start()
         
-    return get_current_analysis()
+    return analysis_result or get_current_analysis()
+
 
 def get_score_color(score):
     if score > 80: return (0, 255, 0)
@@ -515,12 +554,20 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
         cap = cv2.VideoCapture(0)  # 0 = Default webcam
 
 
+        # UNCOMMENT THIS SECTION FOR START SIGNAL SYNC from Unity (ref avatar sync)
+        # Create a separate socket bound to port 5010 just for listening for the START_SIGNAL from unity launch_two_avatar_controller
+        control_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        control_sock.bind(("127.0.0.1", 5010))  # New control port
+
+        listener_thread = threading.Thread(target=listen_for_start_signal, args=(control_sock,))
+        listener_thread.daemon = True
+        listener_thread.start()
+
+
         # Start reference video in a separate thread
-        video_thread = threading.Thread(target=play_reference_video, args=(videoPath,))
-        video_thread.daemon = True
-        video_thread.start()
-
-
+        # video_thread = threading.Thread(target=play_reference_video, args=(videoPath,))
+        # video_thread.daemon = True
+        # video_thread.start()
 
     else:
         print("Running in REPLAY mode...")
@@ -596,9 +643,10 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
             # if USE_LIVE_CAMERA == "false":
             ref_mp4_pose_data_list.append(landmarks_data)
             
-            # If in LIVE mode and reference data exists, perform DTW comparison
+            # If in LIVE mode and reference data exists, perform DTW comparison (ONLY when Unity triggers via spacebar)
             comparison_data = {}
-            if USE_LIVE_CAMERA == "true" and reference_data:
+            if USE_LIVE_CAMERA == "true" and reference_data and comparison_started.is_set():
+                # print("how much processing??")
                 comparison_data = add_live_frame(landmarks_data, reference_data)
                 # Visualize comparison on frame with enhanced per-joint feedback
                 frame = visualize_comparison(frame, comparison_data)
@@ -638,20 +686,6 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
     cap.release()
     cv2.destroyAllWindows()
     print("Camera closed properly.")
-
-    # else:
-    #     print("Running in REPLAY mode (Reading JSON file)...")
-
-    #     # Add Akul / Danny json processing logic here
-    #     #
-
-    #     # init frames, to be populated and sent to unity
-    #     frames = []
-
-    #     ### NEED TO ADD CV CODE FOR MAKING .mp4 INTO json
-    #     # i.e. use videoPath arg
-    #     frames = parse_akul_json(frames)
-    #     send_akul_json_to_unity(frames)
 
 def send_json_to_unity(pose_filename, sock, UDP_IP, UDP_PORT):
     """
