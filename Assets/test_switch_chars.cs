@@ -8,6 +8,6 @@ public class TestCharacterSwitcher : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Alpha1)) skinManager.SetCharacter(0); // Alex
         if (Input.GetKeyDown(KeyCode.Alpha2)) skinManager.SetCharacter(1); // Ninja
-        if (Input.GetKeyDown(KeyCode.Alpha3)) skinManager.SetCharacter(2); // Kachujin
+        // if (Input.GetKeyDown(KeyCode.Alpha3)) skinManager.SetCharacter(2); // Kachujin
     }
 }

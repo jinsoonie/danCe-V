@@ -278,7 +278,7 @@ public class PoseReceiverLeftRef : MonoBehaviour
         // }
 
         // Define the direct offset for the live webcam avatar
-        Vector3 offset = new Vector3(1.5f, 0, 0);
+        Vector3 offset = new Vector3(-1.5f, 0, 0);
 
         // === 1. Move Hips Target ===
         Vector3 leftHipPos = ConvertMediaPipeToUnity(receivedPose.LEFT_HIP) + offset;
