@@ -32,6 +32,16 @@ public class PoseReceiverRightLive : MonoBehaviour
     private PoseData receivedPose = new PoseData();
     private volatile bool _shouldExit = false; // Flag to signal the thread to exit (needed in case ReceiveData() is blocking)
 
+    // Public variables to store score data
+    public float overallSimilarity;
+    public float leftArm;
+    public float rightArm;
+    public float leftLeg;
+    public float rightLeg;
+    public float torso;
+    public float head;
+
+
 
     /// Unity Start() method runs once when the scene starts.
     /// init UDP connection.
@@ -129,7 +139,38 @@ public class PoseReceiverRightLive : MonoBehaviour
                 // Deserialize into CombinedData
                 CombinedData combined = JsonUtility.FromJson<CombinedData>(json);
 
-                // Extract pose
+                // Extract "comparison"
+                // Check for null at each level before accessing nested fields
+                if (combined != null &&
+                    combined.comparison != null &&
+                    combined.comparison.joint_scores != null &&
+                    combined.comparison.joint_scores.groups != null)
+                {
+                    // Safeguard against null arms and legs
+                    if (combined.comparison.joint_scores.groups.arms == null)
+                    {
+                        combined.comparison.joint_scores.groups.arms = new LimbScore { left = 0, right = 0 };
+                    }
+                    if (combined.comparison.joint_scores.groups.legs == null)
+                    {
+                        combined.comparison.joint_scores.groups.legs = new LimbScore { left = 0, right = 0 };
+                    }
+
+                    // Directly assign the values to the public variables in this script.
+                    overallSimilarity = combined.comparison.overall_similarity;
+                    leftArm = (combined.comparison.joint_scores.groups.arms != null) ? combined.comparison.joint_scores.groups.arms.left : 0f;
+                    rightArm = (combined.comparison.joint_scores.groups.arms != null) ? combined.comparison.joint_scores.groups.arms.right : 0f;
+                    leftLeg = (combined.comparison.joint_scores.groups.legs != null) ? combined.comparison.joint_scores.groups.legs.left : 0f;
+                    rightLeg = (combined.comparison.joint_scores.groups.legs != null) ? combined.comparison.joint_scores.groups.legs.right : 0f;
+                    torso = combined.comparison.joint_scores.groups.torso;
+                    head = combined.comparison.joint_scores.groups.head;
+                }
+                // else
+                // {
+                //     Debug.LogWarning("Comparison data or one of its nested components is null.");
+                // }
+
+                // Extract "pose"
                 PoseData tempPose = combined.pose;
 
                 receivedPose.LEFT_WRIST = tempPose.LEFT_WRIST;
@@ -146,7 +187,6 @@ public class PoseReceiverRightLive : MonoBehaviour
 
                 receivedPose.LEFT_ELBOW = tempPose.LEFT_ELBOW;
                 receivedPose.RIGHT_ELBOW = tempPose.RIGHT_ELBOW;
-
             }
             catch (SocketException e)
             {
@@ -157,133 +197,9 @@ public class PoseReceiverRightLive : MonoBehaviour
 
     /// Updates `LeftHandTarget` position smoothly based on received UDP data.
     /// Runs every frame.
-    // void Update()
-    // {
-    //     // root of avatar, midhip
-    //     // Compute MID_HIP dynamically as the midpoint of LEFT_HIP and RIGHT_HIP
-    //     Vector3 leftHipPos = ConvertMediaPipeToUnity(receivedPose.LEFT_HIP);
-    //     Vector3 rightHipPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_HIP);
-    //     Vector3 midHip = (leftHipPos + rightHipPos) / 2;
-    //     Debug.Log("LEFT HIP: " + leftHipPos);
-    //     Debug.Log("RIGHT HIP: " + rightHipPos);
-
-    //     // Set avatar's root position to MID_HIP
-    //     hipsTarget.position = Vector3.Lerp(hipsTarget.position, midHip, Time.deltaTime * 5);
-    //     Debug.Log("Hips Target: " + hipsTarget.position);
-
-    //     // shift `avatarHips` to match `hipsTarget`
-    //     avatarHips.position = Vector3.Lerp(avatarHips.position, hipsTarget.position, Time.deltaTime * 5);
-
-    //     // // --- Compute Hips Rotation ---
-    //     Vector3 hipDirection = (rightHipPos - leftHipPos).normalized;  // Direction vector from left hip to right hip
-    //     Quaternion mixamoOffset = Quaternion.Euler(0, -90, 0);  // Adjust for Mixamo's default orientation
-    //     //v1
-    //     // Vector3 forwardDirection = Vector3.Cross(hipDirection, Vector3.up);
-    //     // Quaternion hipRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
-    //     //v2
-    //     Quaternion hipRotation = Quaternion.LookRotation(hipDirection, Vector3.up) * mixamoOffset;
-    //     avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, Time.deltaTime * 10);
-
-
-    //     // FOR SHOULDERS
-    //     // --- Compute Torso Rotation ---
-    //     Vector3 leftShoulderPos = ConvertMediaPipeToUnity(receivedPose.LEFT_SHOULDER);
-    //     Vector3 rightShoulderPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_SHOULDER);
-
-    //     // Compute torso direction using shoulders
-    //     Vector3 torsoDirection = (rightShoulderPos - leftShoulderPos).normalized;
-    //     Quaternion torsoRotation = Quaternion.LookRotation(torsoDirection, Vector3.up);
-
-    //     Quaternion blendedTorsoRotation = Quaternion.Slerp(avatarSpine.rotation, torsoRotation, Time.deltaTime * 5);
-    //     avatarSpine.rotation = blendedTorsoRotation;
-    //     avatarSpine1.rotation = Quaternion.Slerp(avatarSpine1.rotation, blendedTorsoRotation, Time.deltaTime * 3);
-    //     avatarSpine2.rotation = Quaternion.Slerp(avatarSpine2.rotation, blendedTorsoRotation, Time.deltaTime * 2);
-
-
-    //     ////// RIGHT NOW THE receivedPose.LEFT_WRIST/LEFT_HIP/RIGHT_HIP's scaled ver is being used, but is this right?
-
-    //     // Smooth movement to avoid sudden jumps
-    //     leftHandTarget.position = Vector3.Lerp(leftHandTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST), Time.deltaTime * 5);
-    //     // add more body parts here..
-    //     rightHandTarget.position = Vector3.Lerp(rightHandTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST), Time.deltaTime * 5);
-
-    //     leftFootTarget.position = Vector3.Lerp(leftFootTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_ANKLE), Time.deltaTime * 5);
-    //     rightFootTarget.position = Vector3.Lerp(rightFootTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_ANKLE), Time.deltaTime * 5);
-
-    //     headTarget.position = Vector3.Lerp(headTarget.position, ConvertMediaPipeToUnity(receivedPose.NOSE), Time.deltaTime * 5);
-
-    //     // Debug.Log("Left Foot Target: " + leftFootTarget.position);
-    //     // Debug.Log("Left HAND : " + leftHandTarget.position);
-    // }
     // LateUpdate
     void LateUpdate()
     {
-        // // === 1. Move Hips Target ===
-        // Vector3 leftHipPos = ConvertMediaPipeToUnity(receivedPose.LEFT_HIP);
-        // Vector3 rightHipPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_HIP);
-        // Vector3 midHip = (leftHipPos + rightHipPos) * 0.5f;
-
-        // hipsTarget.position = Vector3.Lerp(hipsTarget.position, midHip, Time.deltaTime * 5);
-        // avatarHips.position = Vector3.Lerp(avatarHips.position, hipsTarget.position, Time.deltaTime * 5);
-
-        // // Compute stable hip rotation
-        // Vector3 hipDirection = (rightHipPos - leftHipPos).normalized; // Sideways direction, i.e. XZ axis vector
-        // Vector3 forwardDirection = -Vector3.Cross(Vector3.up, hipDirection).normalized; // Compute correct forward direction! (i.e. face pos Z axis)
-        // Quaternion hipRotation = Quaternion.identity; // Default rotation to prevent error
-        // if (forwardDirection != Vector3.zero)
-        // {
-        //     hipRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
-        // }
-
-        // // avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, Time.deltaTime * 5);
-        // // Blend hips rotation more aggressively
-        // float hipBlendFactor = 0.9f; // Increase influence of manual rotation
-        // avatarHips.rotation = Quaternion.Slerp(avatarHips.rotation, hipRotation, hipBlendFactor);
-
-
-        // // === 2. Compute torso rotation **relative** to the hip's rotation ===
-        // Vector3 leftShoulderPos = ConvertMediaPipeToUnity(receivedPose.LEFT_SHOULDER);
-        // Vector3 rightShoulderPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_SHOULDER);
-        // Vector3 torsoDirection = (rightShoulderPos - leftShoulderPos).normalized;
-        // // Quaternion torsoRotation = Quaternion.LookRotation(torsoDirection, Vector3.up);
-        // Quaternion torsoRotation = Quaternion.identity; // Default rotation to prevent error
-        // if (forwardDirection != Vector3.zero)
-        // {
-        //     torsoRotation = Quaternion.LookRotation(forwardDirection, Vector3.up);
-        // }
-
-        // // Blend between IK-controlled rotation and computed torso rotation
-        // float torsoBlendFactor = 0.9f; // Adjust between 0 (IK dominant) and 1 (fully manual rotation)
-
-        // avatarSpine.rotation = Quaternion.Slerp(avatarSpine.rotation, torsoRotation, torsoBlendFactor);
-        // avatarSpine1.rotation = Quaternion.Slerp(avatarSpine1.rotation, torsoRotation, torsoBlendFactor);
-        // avatarSpine2.rotation = Quaternion.Slerp(avatarSpine2.rotation, torsoRotation, torsoBlendFactor);
-
-        // // === 3. Move IK Targets ===
-        // leftHandTarget.position = Vector3.MoveTowards(leftHandTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST), Time.deltaTime * 5);
-        // rightHandTarget.position = Vector3.MoveTowards(rightHandTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST), Time.deltaTime * 5);
-        // leftFootTarget.position = Vector3.MoveTowards(leftFootTarget.position, ConvertMediaPipeToUnity(receivedPose.LEFT_ANKLE, isFoot: true), Time.deltaTime * 5);
-        // rightFootTarget.position = Vector3.MoveTowards(rightFootTarget.position, ConvertMediaPipeToUnity(receivedPose.RIGHT_ANKLE, isFoot: true), Time.deltaTime * 5);
-        // headTarget.position = Vector3.MoveTowards(headTarget.position, ConvertMediaPipeToUnity(receivedPose.NOSE), Time.deltaTime * 5);
-
-        // // === 4. Set Hand & Foot Rotation (Important for IK) ===
-        // Vector3 leftElbowPos = ConvertMediaPipeToUnity(receivedPose.LEFT_ELBOW);
-        // Vector3 leftWristPos = ConvertMediaPipeToUnity(receivedPose.LEFT_WRIST);
-        // Vector3 leftForearmDir = (leftWristPos - leftElbowPos).normalized;
-        // leftHandTarget.rotation = Quaternion.identity; // Default rotation to prevent error
-        // if (leftForearmDir != Vector3.zero)
-        // {
-        //     leftHandTarget.rotation = Quaternion.LookRotation(leftForearmDir, Vector3.up);
-        // }
-
-        // Vector3 rightElbowPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_ELBOW);
-        // Vector3 rightWristPos = ConvertMediaPipeToUnity(receivedPose.RIGHT_WRIST);
-        // Vector3 rightForearmDir = (rightWristPos - rightElbowPos).normalized;
-        // rightHandTarget.rotation = Quaternion.identity; // Default rotation to prevent error
-        // if (rightForearmDir != Vector3.zero)
-        // {
-        //     rightHandTarget.rotation = Quaternion.LookRotation(rightForearmDir, Vector3.up);
-        // }
 
         // Define the direct offset for the live webcam avatar
         Vector3 offset = new Vector3(-1.5f, 0, 0);
@@ -383,16 +299,36 @@ public class PoseReceiverRightLive : MonoBehaviour
         public ComparisonData comparison; // the actual feedback to be shown on Unity UI
     }
 
+    // Represents the comparison portion of the JSON (The way danny has packaged ComaprisonData)
     [System.Serializable]
     public class ComparisonData
     {
         public float overall_similarity;
-        public float reference_position;
-        public float timing_difference;
-        public string dtw_distance; // "Infinity" is not a valid float in Unity JSON, so use string
+        public JointScores joint_scores; // Contains both individual scores and group scores.
+    }
 
-        // public JointScores joint_scores;
-        public string[] problem_areas;
-        // public ImprovementSuggestions improvement_suggestions;
+    // Represents joint scores, which include both individual parts and grouped parts.
+    [System.Serializable]
+    public class JointScores
+    {
+        public GroupScores groups;
+    }
+
+    // Represents the grouped scores for different parts of the body.
+    [System.Serializable]
+    public class GroupScores
+    {
+        public LimbScore arms;   // arms has two sub-scores: left and right
+        public LimbScore legs;   // legs has two sub-scores: left and right
+        public float torso;
+        public float head;
+    }
+
+    // Represents the score for limbs which has a left and right component.
+    [System.Serializable]
+    public class LimbScore
+    {
+        public float left;
+        public float right;
     }
 }

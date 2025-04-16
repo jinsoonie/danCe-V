@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-
+using UnityEngine.Video;
 
 
 public class DanceAvatarController : MonoBehaviour
@@ -15,7 +15,7 @@ public class DanceAvatarController : MonoBehaviour
     public GameObject pauseMenu;  // assigned pause menu UI in the Inspector
     // private keep track of isPaused state
     private bool isPaused = false;
-    
+
 
     void Start()
     {

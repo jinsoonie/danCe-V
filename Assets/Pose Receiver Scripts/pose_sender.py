@@ -563,11 +563,10 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
         listener_thread.daemon = True
         listener_thread.start()
 
-
         # Start reference video in a separate thread
-        # video_thread = threading.Thread(target=play_reference_video, args=(videoPath,))
-        # video_thread.daemon = True
-        # video_thread.start()
+        video_thread = threading.Thread(target=play_reference_video, args=(videoPath,))
+        video_thread.daemon = True
+        video_thread.start()
 
     else:
         print("Running in REPLAY mode...")
@@ -602,6 +601,8 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
             print("Reference video finished, terminating program")
             break
 
+        start_time = time.time()    # ADDED for fps matching on stream
+
         ret, frame = cap.read()
         # If either reached end of .mp4 OR Live Camera Feed Ended
         if not ret:
@@ -610,8 +611,8 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
 
         # TEMP ADDED FOR FASTER PROCESSING (TEMP)
         frame_id = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-        if frame_id % frame_skip != 0:
-            continue
+        # if frame_id % frame_skip != 0 and USE_LIVE_CAMERA == "false":
+        #     continue
 
         # Convert to RGB (for MediaPipe)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -647,7 +648,7 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
             comparison_data = {}
             if USE_LIVE_CAMERA == "true" and reference_data and comparison_started.is_set():
                 # print("how much processing??")
-                comparison_data = add_live_frame(landmarks_data, reference_data)
+                # comparison_data = add_live_frame(landmarks_data, reference_data)
                 # Visualize comparison on frame with enhanced per-joint feedback
                 frame = visualize_comparison(frame, comparison_data)
 
@@ -669,6 +670,11 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
 
         # Capture at ~30 fps, Reduce CPU usage
         # time.sleep(1/30)  # ~30 FPS
+
+        # temp added for matching FPS with OG .mp4
+        # elapsed = time.time() - start_time
+        # sleep_time = max(0, adjusted_frame_duration - elapsed)
+        # time.sleep(sleep_time)
 
         # Quit on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):

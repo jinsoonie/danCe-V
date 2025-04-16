@@ -11,6 +11,9 @@ public class MainMenuScript : MonoBehaviour
 {
     public TMP_Text statusText;  // Assign a UI Text-TextMeshPro element in Unity
 
+    public static string videoPath;  // to reference in launch_two_avatar_controllers.cs (for launching ref video as well)
+
+
     void Start()
     {
         statusText.text = "Select a .mp4 dance video to analyze.";
@@ -23,7 +26,7 @@ public class MainMenuScript : MonoBehaviour
 
         if (paths.Length > 0 && !string.IsNullOrEmpty(paths[0]))
         {
-            string videoPath = paths[0];
+            videoPath = paths[0];
             statusText.text = "Processing: " + Path.GetFileName(videoPath);
             UnityEngine.Debug.Log("Processing .mp4 video: " + Path.GetFileName(videoPath));
             UnityEngine.Debug.Log("Application.dataPath (game path) is detected as: " + Application.dataPath);
