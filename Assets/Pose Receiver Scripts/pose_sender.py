@@ -593,6 +593,11 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
     # TEMP ADDED FOR FASTER PROCESSING (TEMP)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     frame_skip = 2  # Process every 2nd frame, for example
+    frame_duration = 1.0 / fps
+
+    # # to calc packet throughput
+    # packets_sent = 0
+    # last_log_time = time.time()
 
     # based on USE_LIVE_CAMERA, run CV on live feed or videoPath .mp4
     while cap.isOpened() or video_cap.isOpened():
@@ -611,8 +616,8 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
 
         # TEMP ADDED FOR FASTER PROCESSING (TEMP)
         frame_id = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-        # if frame_id % frame_skip != 0 and USE_LIVE_CAMERA == "false":
-        #     continue
+        if frame_id % frame_skip != 0 and USE_LIVE_CAMERA == "false":
+            continue
 
         # Convert to RGB (for MediaPipe)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -640,9 +645,13 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
                     "z": round(landmark.z, 4)
                 }
 
-            # If in REPLAY mode, add to reference data
-            # if USE_LIVE_CAMERA == "false":
-            ref_mp4_pose_data_list.append(landmarks_data)
+            # If in REPLAY mode, add to reference data (added timestamp to ensure send_json_to_unity sends at right time)
+            if USE_LIVE_CAMERA == "false":
+                # ref_mp4_pose_data_list.append(landmarks_data)
+                ref_mp4_pose_data_list.append({
+                    "pose": landmarks_data,
+                    "timestamp": frame_id / fps
+                })
             
             # If in LIVE mode and reference data exists, perform DTW comparison (ONLY when Unity triggers via spacebar)
             comparison_data = {}
@@ -658,23 +667,34 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
                 "comparison": comparison_data
             }
 
+            # Add frame timestamp (in seconds - for syncing at Unity end)
+            combined_data["timestamp"] = frame_id / fps
+
             # Convert to JSON string
             pose_json = json.dumps(combined_data)
 
             # Send pose data over UDP directly to Unity
             sock.sendto(pose_json.encode(), (UDP_IP, UDP_PORT))
 
+            # # to calc packet throughput
+            # packets_sent += 1
+            # current_time = time.time()
+            # if current_time - last_log_time >= 1.0:
+            #     print(f"Packets Throughput: {packets_sent} pkt/s")
+            #     packets_sent = 0
+            #     last_log_time = current_time
+
         # Show video output
         cv2.imshow("Live/Video Pose Tracking", frame)
 
 
-        # Capture at ~30 fps, Reduce CPU usage
-        # time.sleep(1/30)  # ~30 FPS
-
-        # temp added for matching FPS with OG .mp4
-        # elapsed = time.time() - start_time
-        # sleep_time = max(0, adjusted_frame_duration - elapsed)
-        # time.sleep(sleep_time)
+        # temp added: enforce frame timing to match reference video speed
+        elapsed = time.time() - start_time
+        effective_fps = fps / frame_skip if frame_skip > 1 else fps
+        frame_duration = 1.0 / effective_fps
+        sleep_time = frame_duration - elapsed
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
         # Quit on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -693,48 +713,73 @@ def main(USE_LIVE_CAMERA, videoPath="", send_preformed_json=False):
     cv2.destroyAllWindows()
     print("Camera closed properly.")
 
+# def send_json_to_unity(pose_filename, sock, UDP_IP, UDP_PORT):
+#     """
+#     Load a JSON file containing a list of pose frames and send selected keypoints to Unity over UDP.
+    
+#     Args:
+#         pose_filename (str): Path to the JSON file.
+#         sock (socket.socket): The UDP socket used for transmission.
+#         UDP_IP (str): The target IP address.
+#         UDP_PORT (int): The target UDP port.
+#     """
+#     # Load the saved pose frames from the JSON file
+#     with open(pose_filename, "r") as f:
+#         frames = json.load(f)
+
+#     frame_rate = 1 / 30  # Simulate ~30 FPS
+#     for frame in frames:
+#         # Extract only the required keypoints, converting their coordinate dicts
+#         pose_data = {
+#             "LEFT_WRIST": frame.get("LEFT_WRIST", {}),
+#             "RIGHT_WRIST": frame.get("RIGHT_WRIST", {}),
+#             "LEFT_ANKLE": frame.get("LEFT_ANKLE", {}),
+#             "RIGHT_ANKLE": frame.get("RIGHT_ANKLE", {}),
+#             "NOSE": frame.get("NOSE", {}),
+#             "LEFT_HIP": frame.get("LEFT_HIP", {}),
+#             "RIGHT_HIP": frame.get("RIGHT_HIP", {}),
+#             "LEFT_SHOULDER": frame.get("LEFT_SHOULDER", {}),
+#             "RIGHT_SHOULDER": frame.get("RIGHT_SHOULDER", {}),
+#             "LEFT_ELBOW": frame.get("LEFT_ELBOW", {}),
+#             "RIGHT_ELBOW": frame.get("RIGHT_ELBOW", {})
+#         }
+        
+#         # Convert the selected keypoints to a JSON string
+#         json_data = json.dumps(pose_data)
+        
+#         # Send the JSON string over UDP
+#         sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
+        
+#         # Optional: uncomment for debugging
+#         # print(f"Sent: {json_data}")
+        
+#         # Sleep to simulate real-time playback (~30 FPS)
+#         time.sleep(frame_rate)
+
 def send_json_to_unity(pose_filename, sock, UDP_IP, UDP_PORT):
     """
-    Load a JSON file containing a list of pose frames and send selected keypoints to Unity over UDP.
-    
-    Args:
-        pose_filename (str): Path to the JSON file.
-        sock (socket.socket): The UDP socket used for transmission.
-        UDP_IP (str): The target IP address.
-        UDP_PORT (int): The target UDP port.
+    Load a JSON file containing a list of pose frames with timestamps and send over UDP in sync with original timing.
     """
-    # Load the saved pose frames from the JSON file
     with open(pose_filename, "r") as f:
         frames = json.load(f)
 
-    frame_rate = 1 / 30  # Simulate ~30 FPS
-    for frame in frames:
-        # Extract only the required keypoints, converting their coordinate dicts
-        pose_data = {
-            "LEFT_WRIST": frame.get("LEFT_WRIST", {}),
-            "RIGHT_WRIST": frame.get("RIGHT_WRIST", {}),
-            "LEFT_ANKLE": frame.get("LEFT_ANKLE", {}),
-            "RIGHT_ANKLE": frame.get("RIGHT_ANKLE", {}),
-            "NOSE": frame.get("NOSE", {}),
-            "LEFT_HIP": frame.get("LEFT_HIP", {}),
-            "RIGHT_HIP": frame.get("RIGHT_HIP", {}),
-            "LEFT_SHOULDER": frame.get("LEFT_SHOULDER", {}),
-            "RIGHT_SHOULDER": frame.get("RIGHT_SHOULDER", {}),
-            "LEFT_ELBOW": frame.get("LEFT_ELBOW", {}),
-            "RIGHT_ELBOW": frame.get("RIGHT_ELBOW", {})
-        }
-        
-        # Convert the selected keypoints to a JSON string
+    # Extract timestamps from pre-saved ref json
+    timestamps = [frame["timestamp"] for frame in frames]
+    start_time = time.time()
+
+    for i, frame in enumerate(frames):
+        # Wait until real time catches up to frame timestamp
+        target_time = start_time + timestamps[i]
+        now = time.time()
+        sleep_time = target_time - now
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+
+        # Only send the pose, not the comparison or timestamp
+        pose_data = frame.get("pose", frame)  # fallback for older jsons
         json_data = json.dumps(pose_data)
-        
-        # Send the JSON string over UDP
         sock.sendto(json_data.encode(), (UDP_IP, UDP_PORT))
-        
-        # Optional: uncomment for debugging
-        # print(f"Sent: {json_data}")
-        
-        # Sleep to simulate real-time playback (~30 FPS)
-        time.sleep(frame_rate)
+
 
 def parse_akul_json(frames):
     with open(json_to_analyze, "r") as file:

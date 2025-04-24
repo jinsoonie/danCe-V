@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Collections.Generic;
 
 
 /// script listens for UDP messages from Python and updates the position of `LeftHandTarget`.
@@ -36,6 +37,18 @@ public class PoseReceiverLeftRef : MonoBehaviour
     public bool hasStartedVideo = false;
     private bool hasSetVideoStart = false;
 
+    // private class for syncing ref video
+    private class TimedPose
+    {
+        public float timestamp;
+        public PoseData pose;
+    }
+
+    private Queue<TimedPose> poseBuffer = new Queue<TimedPose>();
+    private float playbackStartTime;
+    private bool playbackStarted = false;
+    // flag for receiveData() to signal to LateUpdate()
+    private bool pendingStartTime = false;
 
 
     /// Unity Start() method runs once when the scene starts.
@@ -124,25 +137,43 @@ public class PoseReceiverLeftRef : MonoBehaviour
                 string json = Encoding.UTF8.GetString(data);
 
                 // inserted for testing/printing json message (contains testmsg + 3 floats?)
-                Debug.Log("Received JSON: " + json);
+                // Debug.Log("Received JSON: " + json);
 
                 // Convert JSON string to PoseData object (parse)
                 PoseData tempPose = JsonUtility.FromJson<PoseData>(json);
 
-                receivedPose.LEFT_WRIST = tempPose.LEFT_WRIST;
-                receivedPose.RIGHT_WRIST = tempPose.RIGHT_WRIST;
-                receivedPose.LEFT_ANKLE = tempPose.LEFT_ANKLE;
-                receivedPose.RIGHT_ANKLE = tempPose.RIGHT_ANKLE;
-                receivedPose.NOSE = tempPose.NOSE;
+                // Enqueue the received (tempPose + timestamp)
+                TimedPose timedPose = new TimedPose
+                {
+                    timestamp = tempPose.timestamp,  // added to PoseData
+                    pose = tempPose
+                };
 
-                receivedPose.LEFT_HIP = tempPose.LEFT_HIP;
-                receivedPose.RIGHT_HIP = tempPose.RIGHT_HIP;
+                lock (poseBuffer)
+                {
+                    poseBuffer.Enqueue(timedPose);
+                }
 
-                receivedPose.LEFT_SHOULDER = tempPose.LEFT_SHOULDER;
-                receivedPose.RIGHT_SHOULDER = tempPose.RIGHT_SHOULDER;
+                if (!playbackStarted)
+                {
+                    pendingStartTime = true;
+                }
 
-                receivedPose.LEFT_ELBOW = tempPose.LEFT_ELBOW;
-                receivedPose.RIGHT_ELBOW = tempPose.RIGHT_ELBOW;
+                // below is no longer needed..? because enqueued and later assigned on dequeue
+                // receivedPose.LEFT_WRIST = tempPose.LEFT_WRIST;
+                // receivedPose.RIGHT_WRIST = tempPose.RIGHT_WRIST;
+                // receivedPose.LEFT_ANKLE = tempPose.LEFT_ANKLE;
+                // receivedPose.RIGHT_ANKLE = tempPose.RIGHT_ANKLE;
+                // receivedPose.NOSE = tempPose.NOSE;
+
+                // receivedPose.LEFT_HIP = tempPose.LEFT_HIP;
+                // receivedPose.RIGHT_HIP = tempPose.RIGHT_HIP;
+
+                // receivedPose.LEFT_SHOULDER = tempPose.LEFT_SHOULDER;
+                // receivedPose.RIGHT_SHOULDER = tempPose.RIGHT_SHOULDER;
+
+                // receivedPose.LEFT_ELBOW = tempPose.LEFT_ELBOW;
+                // receivedPose.RIGHT_ELBOW = tempPose.RIGHT_ELBOW;
 
                 // once first ref packet received, update the flag
                 if (!hasSetVideoStart)
@@ -164,6 +195,25 @@ public class PoseReceiverLeftRef : MonoBehaviour
     // LateUpdate
     void LateUpdate()
     {
+        if (pendingStartTime)
+        {
+            playbackStartTime = Time.time;
+            playbackStarted = true;
+            pendingStartTime = false;
+        }
+
+        if (!playbackStarted) return;
+        float currentTime = Time.time - playbackStartTime;
+
+        // Safely dequeue the next pose if it’s time (synced with ref video)
+        lock (poseBuffer)
+        {
+            if (poseBuffer.Count > 0 && poseBuffer.Peek().timestamp <= currentTime)
+            {
+                receivedPose = poseBuffer.Dequeue().pose;
+            }
+        }
+
         // Define the direct offset for the live webcam avatar
         Vector3 offset = new Vector3(-1.5f, 0, 0);
 
@@ -252,5 +302,9 @@ public class PoseReceiverLeftRef : MonoBehaviour
 
         // left_elbow, right_elbow for direction in lateUpdate
         public Vector3 LEFT_ELBOW, RIGHT_ELBOW;
+
+        // for syncing timing purposes
+        public float timestamp;
     }
+
 }
