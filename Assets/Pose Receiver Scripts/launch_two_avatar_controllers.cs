@@ -89,7 +89,7 @@ public class DanceAvatarController : MonoBehaviour
     IEnumerator RunPythonProcess(bool useLiveCamera, string filePath, bool sendPreformedJson)
     {
         string pythonPath = "python"; // Make sure python is installed and in your PATH
-        string scriptPath = Application.dataPath + "/Pose Receiver Scripts/pose_sender.py";
+        string scriptPath = Application.streamingAssetsPath + "/Python Scripts/pose_sender.py";
         string arguments = "";
 
         // Configure the arguments based on the process type.

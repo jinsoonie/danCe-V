@@ -43,7 +43,7 @@ public class MainMenuScript : MonoBehaviour
     IEnumerator RunPythonProcessVideo(string videoPath)
     {
         string pythonPath = "python"; // Ensure Python is installed on the device first!
-        string scriptPath = Application.dataPath + "/Pose Receiver Scripts/pose_sender.py"; // pose_sender.py script in game folder
+        string scriptPath = Application.streamingAssetsPath + "/Python Scripts/pose_sender.py"; // pose_sender.py script in game folder
 
         UnityEngine.Debug.Log($"Running Python Script: {scriptPath}");
 

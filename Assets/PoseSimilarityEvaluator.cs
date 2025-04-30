@@ -37,7 +37,8 @@ public class PoseSimilarityEvaluator : MonoBehaviour
         // Torso = average of spine1 and hips positions
         Vector3 leftTorso = (leftRef.avatarHips.position + leftRef.avatarSpine1.position) / 2f;
         Vector3 rightTorso = (rightLive.avatarHips.position + rightLive.avatarSpine1.position) / 2f;
-        torso = ComputeSimilarity(leftTorso, rightTorso);
+        // torso = ComputeSimilarity(leftTorso, rightTorso);
+        torso = ComputeSimilarity(leftRef.hipsTarget.position, rightLive.hipsTarget.position);
 
         overallSimilarity = (leftArm + rightArm + leftLeg + rightLeg + head + torso) / 6f;
     }
@@ -45,7 +46,7 @@ public class PoseSimilarityEvaluator : MonoBehaviour
     float ComputeSimilarity(Vector3 a, Vector3 b)
     {
         float dist = Vector3.Distance(a, b);
-        float similarity = Mathf.Clamp01(1 - (dist - 0.1f) / maxDistance);
+        float similarity = Mathf.Clamp01(1 - (dist - 0.2f) / maxDistance);
         similarity = similarity * 100f;
         if (similarity == 100f)
         {
